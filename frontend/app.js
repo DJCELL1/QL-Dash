@@ -1345,9 +1345,9 @@
 
   const SUB_LANES = [
     { id: "waiting_material", label: "Waiting on material" },
-    { id: "ready_despatch", label: "Ready to despatch" },
-    { id: "at_sub", label: "At subcontractor" },
-    { id: "ready", label: "Ready / back" },
+    { id: "ready_despatch", label: "Ready to coat" },
+    { id: "at_sub", label: "In powdercoating" },
+    { id: "ready", label: "Coated" },
   ];
 
   // the two lanes that feed the run sheet — the running order here drives despatch
@@ -1366,7 +1366,7 @@
     today.setHours(0, 0, 0, 0);
     const late = eta < today;
     // flag when the date came straight from BC's PO rather than being confirmed by us
-    const src = job.eta_from_po ? '<span class="sub-eta-src" title="From the purchase order — not yet confirmed with the sub">PO</span>' : "";
+    const src = job.eta_from_po ? '<span class="sub-eta-src" title="From the purchase order — not yet confirmed">PO</span>' : "";
     return `<span class="${late ? "sub-eta-late" : ""}">ETA ${fmtDate(job.eta_date)}</span>${src}`;
   }
 
@@ -1418,7 +1418,7 @@
       ${
         showEta
           ? `<div class="sub-card-controls">
-              <input type="date" class="sub-eta" data-pro="${job.prod_order_no}" data-wc="${job.work_centre_no}" value="${job.eta_date || ""}" title="ETA back from subcontractor">
+              <input type="date" class="sub-eta" data-pro="${job.prod_order_no}" data-wc="${job.work_centre_no}" value="${job.eta_date || ""}" title="Expected out of powdercoating">
             </div>`
           : ""
       }
@@ -1918,7 +1918,7 @@
       html += "</div>";
     }
 
-    html += printFooterHTML(["Despatched by", "Date", "Received by"]);
+    html += printFooterHTML(["Coated by", "Date", "Checked by"]);
 
     $("#print-sheet").innerHTML = html;
     window.print();
