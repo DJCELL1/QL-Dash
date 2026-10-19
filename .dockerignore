@@ -1,0 +1,14 @@
+.venv/
+data/
+backups/
+__pycache__/
+*.pyc
+*.db
+*.db-wal
+*.db-shm
+.claude/
+.git/
+*.xlsx
+*.xls
+*.csv
+scratch/

@@ -1,0 +1,15 @@
+.venv/
+__pycache__/
+*.pyc
+
+# Live database and backups — these hold real production data, keep them local
+data/
+backups/
+*.db
+*.db-wal
+*.db-shm
+
+# BC exports
+*.xlsx
+*.xls
+*.csv
