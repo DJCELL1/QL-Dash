@@ -1,0 +1,534 @@
+/* Factory floor tool — phone first, used one-handed on the shop floor.
+   Everything is sized for a thumb, and for a screen being read at arm's
+   length in bad light. Shares the dashboard's palette so it reads as the
+   same product. */
+
+:root {
+  color-scheme: light;
+  --surface:      #fcfcfb;
+  --plane:        #f2f1ec;
+  --ink:          #0b0b0b;
+  --ink-2:        #52514e;
+  --ink-3:        #898781;
+  --line:         #d9d8d0;
+  --accent:       #2a78d6;
+  --accent-ink:   #1c5aa6;
+  --good:         #0ca30c;
+  --good-ink:     #006300;
+  --good-bg:      #e7f4e7;
+  --warn:         #fab219;
+  --critical:     #d03b3b;
+  --critical-bg:  #fbeceb;
+  --fill:         rgba(12, 163, 12, 0.18);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --surface:     #1a1a19;
+    --plane:       #0d0d0d;
+    --ink:         #ffffff;
+    --ink-2:       #c3c2b7;
+    --ink-3:       #898781;
+    --line:        #34342f;
+    --accent:      #3987e5;
+    --accent-ink:  #8bbaf5;
+    --good:        #0ca30c;
+    --good-ink:    #4cc44c;
+    --good-bg:     #13240f;
+    --warn:        #fab219;
+    --critical:    #e66767;
+    --critical-bg: #2b1514;
+    --fill:        rgba(12, 163, 12, 0.26);
+  }
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--plane);
+  color: var(--ink);
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.sr {
+  position: absolute;
+  width: 1px; height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* ---------- sticky header ---------- */
+.bar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+  padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px));
+  padding-top: calc(10px + env(safe-area-inset-top, 0px));
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.bar-top { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.bar-title { font-size: 17px; font-weight: 700; letter-spacing: -0.01em; }
+.bar-date { font-size: 13px; color: var(--ink-3); font-weight: 600; }
+
+.scanrow { display: flex; gap: 8px; }
+
+.scan-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 52px;
+  padding: 0 14px;
+  font-size: 17px;   /* >=16px so iOS doesn't zoom the page on focus */
+  font-weight: 600;
+  border: 2px solid var(--line);
+  border-radius: 12px;
+  background: var(--plane);
+  color: var(--ink);
+}
+.scan-input:focus { outline: none; border-color: var(--accent); }
+.scan-input::placeholder { color: var(--ink-3); font-weight: 500; }
+
+.scan-btn {
+  flex: 0 0 auto;
+  width: 52px;
+  height: 52px;
+  font-size: 24px;
+  line-height: 1;
+  border: 2px solid var(--line);
+  border-radius: 12px;
+  background: var(--plane);
+  color: var(--ink);
+  cursor: pointer;
+}
+.scan-btn:active { background: var(--line); }
+
+.segmented { display: flex; gap: 4px; background: var(--plane); border-radius: 10px; padding: 3px; }
+.seg {
+  flex: 1;
+  height: 38px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ink-2);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.seg.is-active { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,.12); }
+
+/* ---------- list ---------- */
+main { padding: 10px 12px 40px; }
+
+.summary {
+  margin: 4px 2px 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-3);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.empty { color: var(--ink-3); text-align: center; padding: 40px 20px; font-size: 15px; }
+
+.job {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  margin-bottom: 9px;
+  overflow: hidden;
+}
+.job.is-open { border-color: var(--accent); }
+.job.is-done { opacity: 0.62; }
+.job.is-hit { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 28%, transparent); }
+
+/* tapping anywhere on the head opens the job */
+.job-head {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 4px 10px;
+  align-items: center;
+  width: 100%;
+  padding: 13px 14px;
+  border: none;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+
+.job-pro { font-size: 18px; font-weight: 700; letter-spacing: -0.01em; }
+.job-qty {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.job-customer { grid-column: 1 / -1; font-size: 14px; color: var(--ink-2); font-weight: 600; }
+.job-item {
+  grid-column: 1 / -1;
+  font-size: 12.5px;
+  color: var(--ink-3);
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.job-meta { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px; margin-top: 3px; }
+
+.pill {
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: var(--plane);
+  color: var(--ink-2);
+  letter-spacing: 0.02em;
+}
+.pill.late { background: var(--critical-bg); color: var(--critical); }
+.pill.done { background: var(--good-bg); color: var(--good-ink); }
+
+/* thin progress strip along the bottom of the head */
+.job-strip { height: 5px; background: var(--plane); }
+.job-strip span { display: block; height: 100%; background: var(--good); }
+
+/* ---------- stages ---------- */
+.stages { padding: 4px 12px 12px; display: flex; flex-direction: column; gap: 8px; }
+
+.stage {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: var(--plane);
+}
+.stage.is-complete { background: var(--good-bg); border-color: color-mix(in srgb, var(--good) 40%, transparent); }
+.stage.is-locked { opacity: 0.55; }
+
+.stage-top { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 9px; }
+.stage-name { font-size: 14px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; }
+.stage-count { font-size: 16px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.stage.is-complete .stage-name,
+.stage.is-complete .stage-count { color: var(--good-ink); }
+
+.stage-controls { display: grid; grid-template-columns: 60px 1fr 60px auto; gap: 8px; align-items: stretch; }
+
+.step {
+  height: 54px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+}
+.step:active { background: var(--line); }
+.step:disabled { opacity: 0.35; cursor: default; }
+
+.qty {
+  height: 54px;
+  width: 100%;
+  min-width: 0;
+  text-align: center;
+  font-size: 22px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--ink);
+  -moz-appearance: textfield;
+}
+.qty::-webkit-outer-spin-button,
+.qty::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.qty:focus { outline: none; border-color: var(--accent); }
+
+.all-btn {
+  height: 54px;
+  padding: 0 14px;
+  border: 1px solid color-mix(in srgb, var(--good) 45%, transparent);
+  border-radius: 10px;
+  background: var(--good-bg);
+  color: var(--good-ink);
+  font-size: 14px;
+  font-weight: 800;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.all-btn:disabled { opacity: 0.35; cursor: default; }
+
+.stage-note { margin-top: 8px; font-size: 12.5px; font-weight: 600; color: var(--ink-3); }
+.stage-note.bad { color: var(--critical); }
+
+/* ---------- toast ---------- */
+.toast {
+  position: fixed;
+  left: 12px;
+  right: 12px;
+  bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+  z-index: 40;
+  padding: 13px 16px;
+  border-radius: 12px;
+  background: var(--ink);
+  color: var(--plane);
+  font-size: 14.5px;
+  font-weight: 600;
+  box-shadow: 0 6px 24px rgba(0,0,0,.28);
+}
+.toast.bad { background: var(--critical); color: #fff; }
+.toast.good { background: var(--good-ink); color: #fff; }
+
+/* ---------- camera ---------- */
+.camera {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+/* a class selector outranks the hidden attribute's UA rule, so restate it */
+.camera[hidden] { display: none; }
+.camera video { width: 100%; height: 100%; object-fit: cover; }
+.camera-frame {
+  position: absolute;
+  left: 8%;
+  right: 8%;
+  height: 26%;
+  top: 37%;
+  border: 3px solid rgba(255,255,255,.9);
+  border-radius: 14px;
+  box-shadow: 0 0 0 100vmax rgba(0,0,0,.45);
+}
+.camera-hint {
+  position: absolute;
+  top: calc(37% - 46px);
+  left: 0; right: 0;
+  text-align: center;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+}
+.camera-close {
+  position: absolute;
+  bottom: calc(28px + env(safe-area-inset-bottom, 0px));
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 15px 34px;
+  border: none;
+  border-radius: 999px;
+  background: #fff;
+  color: #000;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+/* Stage chips: the read-from-a-distance summary. Off on a phone, where the
+   screen is in your hand and tapping the job open tells you the same thing. */
+.job-stages { display: none; }
+.bar-stats { display: none; }
+.bar-spacer { flex: 1; }
+
+.full-btn {
+  flex: 0 0 auto;
+  width: 40px; height: 40px;
+  font-size: 18px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--plane);
+  color: var(--ink-2);
+  cursor: pointer;
+}
+
+/* ==========================================================================
+   Wall display.
+
+   A 65" screen is a read-from-four-metres problem, not a width problem, so
+   everything below is sized in rem and the root font size does the scaling:
+   one number per breakpoint moves the whole layout from a laptop to 1080p to
+   4K. It stays touch-operable — the same tap-to-open and +/- as the phone,
+   just bigger targets.
+   ========================================================================== */
+@media (min-width: 1400px) {
+  html { font-size: 18px; }
+
+  .bar { padding: 0.7rem 1rem; gap: 0.6rem; }
+  .bar-top { gap: 0.8rem; }
+  .bar-title { font-size: 1.35rem; }
+  .bar-date { font-size: 0.95rem; }
+
+  .bar-stats {
+    display: inline;
+    font-size: 1.2rem;
+    font-weight: 800;
+    color: var(--good-ink);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .scanrow { max-width: 34rem; }
+  .scan-input { height: 3rem; font-size: 1.05rem; border-radius: 0.7rem; }
+  .scan-btn, .full-btn { width: 3rem; height: 3rem; font-size: 1.4rem; border-radius: 0.7rem; }
+  .segmented { max-width: 34rem; }
+  .seg { height: 2.4rem; font-size: 0.9rem; }
+
+  main { padding: 0.8rem 1rem 2rem; max-width: none; }
+  .summary { font-size: 0.85rem; margin-bottom: 0.7rem; }
+
+  /* jobs tile across the screen instead of one long column */
+  /* 20rem lands 3 columns on a 1080p screen and 6 on 4K — the card keeps the
+     same proportion to the type either way, since both scale off the root. */
+  #list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(20rem, 1fr));
+    gap: 0.7rem;
+    align-items: start;
+  }
+  .job { margin-bottom: 0; border-radius: 0.7rem; }
+
+  .job-head { padding: 0.8rem 0.9rem; gap: 0.2rem 0.6rem; }
+  .job-pro { font-size: 1.6rem; }
+  .job-qty { font-size: 1.15rem; }
+  .job-customer { font-size: 1rem; }
+  .job-item { font-size: 0.82rem; -webkit-line-clamp: 1; }
+  .pill { font-size: 0.72rem; padding: 0.15rem 0.5rem; }
+  .job-strip { height: 0.35rem; }
+
+  /* per-stage progress, readable across the room */
+  .job-stages {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0.3rem;
+    margin-top: 0.5rem;
+  }
+  .chip {
+    position: relative;
+    overflow: hidden;
+    border-radius: 0.35rem;
+    background: var(--plane);
+    border: 1px solid var(--line);
+    padding: 0.3rem 0.4rem;
+    min-height: 2.1rem;
+    display: flex;
+    align-items: center;
+  }
+  .chip-fill {
+    position: absolute;
+    inset: 0 auto 0 0;
+    background: var(--fill);
+  }
+  .chip-text {
+    position: relative;
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    width: 100%;
+    gap: 0.3rem;
+    /* sized for four metres: on a 65" 1080p screen 1px ≈ 0.75mm, so 0.75rem
+       lands near 13mm of cap height and the count near 19mm. */
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+  }
+  .chip-text b { font-size: 1.05rem; color: var(--ink); font-variant-numeric: tabular-nums; }
+
+  /* entry controls stay thumb-sized — it's a touch screen */
+  .stages { padding: 0.2rem 0.7rem 0.7rem; gap: 0.45rem; }
+  .stage { border-radius: 0.55rem; padding: 0.55rem 0.65rem; }
+  .stage-name { font-size: 0.85rem; }
+  .stage-count { font-size: 1rem; }
+  .stage-controls { grid-template-columns: 3.4rem 1fr 3.4rem auto; gap: 0.45rem; }
+  .step { height: 3rem; font-size: 1.5rem; border-radius: 0.55rem; }
+  .qty { height: 3rem; font-size: 1.25rem; border-radius: 0.55rem; }
+  .all-btn { height: 3rem; font-size: 0.85rem; padding: 0 0.8rem; border-radius: 0.55rem; }
+  .stage-note { font-size: 0.75rem; }
+
+  .toast { left: auto; right: 1.5rem; width: max-content; max-width: 34rem; font-size: 1rem; }
+  .empty { font-size: 1.1rem; padding: 3rem; }
+}
+
+/* 1080p wall screen */
+@media (min-width: 1900px) { html { font-size: 24px; } }
+
+/* 4K wall screen. Physical text size is px × (screen width / viewport width),
+   so doubling the pixels on the same 65" panel halves how big it looks. The
+   root has to double too for 4K to read the same as 1080p from four metres.
+   Gated at 3000px because a 4K desktop monitor runs OS scaling and reports
+   ~1920–2560 instead, landing in the bucket above where it belongs. */
+@media (min-width: 3000px) { html { font-size: 48px; } }
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+}
+
+/* ---------- signed out ---------- */
+/* The board stays readable; only the controls for changing it lock. */
+body.is-readonly .stage-controls { opacity: 0.5; pointer-events: none; }
+
+.signin {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: color-mix(in srgb, var(--plane) 80%, transparent);
+}
+.signin[hidden] { display: none; }
+
+.signin-box {
+  width: 100%;
+  max-width: 22rem;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  box-shadow: 0 14px 44px rgba(0,0,0,.3);
+}
+.signin-box h2 { margin: 0; font-size: 19px; font-weight: 700; }
+.signin-box p { margin: 0; font-size: 13.5px; color: var(--ink-2); line-height: 1.45; }
+.signin-box input {
+  height: 52px;
+  padding: 0 14px;
+  font-size: 17px;   /* >=16px so iOS doesn't zoom on focus */
+  border: 2px solid var(--line);
+  border-radius: 12px;
+  background: var(--plane);
+  color: var(--ink);
+}
+.signin-box input:focus { outline: none; border-color: var(--accent); }
+.signin-err { color: var(--critical) !important; font-weight: 600; }
+.signin-go, .signin-cancel {
+  height: 52px;
+  border-radius: 12px;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.signin-go { border: none; background: var(--accent); color: #fff; }
+.signin-go:disabled { opacity: 0.6; }
+.signin-cancel { border: 1px solid var(--line); background: transparent; color: var(--ink-2); }
+.signin-img { width: 100%; border-radius: 10px; display: block; }

@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b0b0b">
+<title>Factory Floor</title>
+<link rel="stylesheet" href="floor.css">
+</head>
+<body>
+
+<header class="bar">
+  <div class="bar-top">
+    <span class="bar-title">Factory Floor</span>
+    <span class="bar-spacer"></span>
+    <span class="bar-stats" id="headline"></span>
+    <span class="bar-date" id="today"></span>
+    <button type="button" class="full-btn" id="fullBtn" title="Full screen" hidden>
+      <span aria-hidden="true">⛶</span><span class="sr">Full screen</span>
+    </button>
+    <button type="button" class="full-btn" id="signBtn" title="Sign in">
+      <span aria-hidden="true">🔒</span><span class="sr">Sign in</span>
+    </button>
+  </div>
+
+  <div class="scanrow">
+    <input
+      type="search"
+      id="scan"
+      class="scan-input"
+      placeholder="Scan or type PRO…"
+      autocomplete="off"
+      autocorrect="off"
+      autocapitalize="characters"
+      spellcheck="false"
+      enterkeyhint="search">
+    <button type="button" class="scan-btn" id="cameraBtn" title="Scan with the camera" hidden>
+      <span aria-hidden="true">▣</span><span class="sr">Scan with camera</span>
+    </button>
+  </div>
+
+  <div class="segmented" id="scope">
+    <button type="button" class="seg is-active" data-scope="today">Today</button>
+    <button type="button" class="seg" data-scope="open">All open</button>
+    <button type="button" class="seg" data-scope="done">Finished</button>
+  </div>
+</header>
+
+<main>
+  <p class="summary" id="summary"></p>
+  <div id="list"></div>
+  <p class="empty" id="empty" hidden></p>
+</main>
+
+<div class="toast" id="toast" hidden></div>
+
+<div class="signin" id="signin" hidden>
+  <form class="signin-box" id="signinForm">
+    <img class="signin-img" src="assets/no-touch.jpg" alt="" onerror="this.remove()">
+    <h2>Sorry Bruv</h2>
+    <p>Look but don't touch &mdash; anyone can see the board, but entering what's been done needs an account.</p>
+    <input type="text" id="signinUser" placeholder="Name" autocomplete="username" autocapitalize="none" required>
+    <input type="password" id="signinPass" placeholder="Password" autocomplete="current-password" required>
+    <p class="signin-err" id="signinErr" hidden></p>
+    <button type="submit" class="signin-go" id="signinGo">Sign in</button>
+    <button type="button" class="signin-cancel" id="signinCancel">Cancel</button>
+  </form>
+</div>
+
+<div class="camera" id="camera" hidden>
+  <video id="video" playsinline muted></video>
+  <div class="camera-frame" aria-hidden="true"></div>
+  <p class="camera-hint">Point at the barcode on the job card</p>
+  <button type="button" class="camera-close" id="cameraClose">Cancel</button>
+</div>
+
+<script src="floor.js"></script>
+</body>
+</html>

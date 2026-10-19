@@ -1,0 +1,422 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Production Dashboard</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="app">
+
+  <header class="topbar">
+    <div class="topbar-left">
+      <h1>Production Dashboard</h1>
+      <nav class="tabs" id="tabs">
+        <button class="tab-btn is-active" data-view="joinery">Joinery</button>
+        <button class="tab-btn" data-view="subcontractors">Subcontractors</button>
+        <button class="tab-btn" data-view="factory">Factory floor</button>
+        <button class="tab-btn" data-view="scheduling">Door schedule</button>
+        <button class="tab-btn" data-view="cavities">Cavities schedule</button>
+        <button class="tab-btn" data-view="labels">Labels</button>
+      </nav>
+    </div>
+    <div class="topbar-right">
+      <span class="updated-at" id="updatedAt">—</span>
+      <input type="file" id="uploadInput" accept=".xlsx,.xls,.csv" multiple hidden>
+      <button class="btn" id="uploadBtn" title="Upload a Production Scheduler or Purchase Orders export">Upload export</button>
+      <button class="btn" id="rescanBtn" hidden>Rescan folder</button>
+      <a class="btn" id="backupBtn" href="/api/admin/backup" download title="Download a copy of the whole database">Backup</a>
+      <button class="who" id="who" hidden title="Accounts"></button>
+      <button class="btn" id="signInBtn">Sign in</button>
+      <button class="btn" id="signOutBtn" hidden>Sign out</button>
+    </div>
+  </header>
+
+  <main id="main">
+
+    <section class="view" id="view-joinery">
+      <div class="stat-row" id="joinery-stats"></div>
+
+      <div class="chart-card capacity-card">
+        <div class="chart-card-head">
+          <h2>Make capacity — when can we start a new lot?</h2>
+          <div class="capacity-controls">
+            <label class="capacity-label" id="capacity-stage-wrap" hidden>
+              Stage
+              <select id="capacity-stage"></select>
+            </label>
+            <label class="capacity-label">
+              Doors / workday
+              <input type="number" class="num-input" id="capacity-rate" min="1" step="1" value="20">
+            </label>
+            <label class="capacity-label">
+              Lead time (bdays)
+              <input type="number" class="num-input" id="capacity-leadtime" min="0" step="1" value="3">
+            </label>
+          </div>
+        </div>
+        <div class="capacity-summary" id="capacity-summary"></div>
+        <div id="capacity-chart" class="chart-body"></div>
+
+        <hr class="card-divider">
+
+        <div class="chart-card-head">
+          <h2>Start-date smoothing</h2>
+        </div>
+        <p class="leveling-note" id="leveling-note"></p>
+        <div id="leveling-chart" class="chart-body"></div>
+        <div class="table-wrap" style="border:none;border-radius:0;">
+          <table class="data-table" id="leveling-table">
+            <thead></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="chart-card">
+        <div class="chart-card-head">
+          <h2>Open orders over time</h2>
+        </div>
+        <div id="joinery-chart" class="chart-body"></div>
+      </div>
+      <div class="filter-bar">
+        <input type="search" class="search-input" id="joinery-search" placeholder="Search order, customer, item…">
+        <div class="chip-group" id="joinery-chips">
+          <button class="chip" data-filter="overdue">Overdue</button>
+          <button class="chip" data-filter="urgent">Urgent</button>
+          <button class="chip" data-filter="shortage">Shortage</button>
+          <button class="chip" data-filter="potential_back_order">Back order</button>
+          <button class="chip" data-filter="open">Open only</button>
+        </div>
+        <div class="expand-controls">
+          <button class="link-btn" id="joinery-expandAll">Expand all</button>
+          <button class="link-btn" id="joinery-collapseAll">Collapse all</button>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table class="data-table" id="joinery-table">
+          <thead></thead>
+          <tbody></tbody>
+        </table>
+        <div class="empty-state" id="joinery-empty" hidden>No data yet — drop today's Production Scheduler export (Joinery) into Downloads.</div>
+      </div>
+    </section>
+
+    <section class="view" id="view-subcontractors" hidden>
+      <div class="segmented" id="sub-view-toggle">
+        <button class="segmented-btn" data-mode="board">Scheduling board</button>
+        <button class="segmented-btn" data-mode="list">Order list</button>
+      </div>
+
+      <div id="sub-board" hidden>
+        <div class="filter-bar">
+          <input type="search" class="search-input" id="subboard-search" placeholder="Search PRO, order, customer, item…">
+          <span class="updated-at" id="subboard-updated"></span>
+        </div>
+        <div class="sub-error" id="subboard-error" hidden></div>
+        <div id="sub-contractor-boards"></div>
+      </div>
+
+      <div id="sub-list">
+      <div class="stat-row" id="sub-stats"></div>
+      <div class="chart-card">
+        <div class="chart-card-head">
+          <h2>Open orders over time</h2>
+        </div>
+        <div id="sub-chart" class="chart-body"></div>
+      </div>
+      <div class="filter-bar">
+        <input type="search" class="search-input" id="sub-search" placeholder="Search order, customer, item…">
+        <div class="chip-group" id="sub-chips">
+          <button class="chip" data-filter="overdue">Overdue</button>
+          <button class="chip" data-filter="urgent">Urgent</button>
+          <button class="chip" data-filter="shortage">Shortage</button>
+          <button class="chip" data-filter="potential_back_order">Back order</button>
+          <button class="chip" data-filter="open">Open only</button>
+        </div>
+        <div class="expand-controls">
+          <button class="link-btn" id="sub-expandAll">Expand all</button>
+          <button class="link-btn" id="sub-collapseAll">Collapse all</button>
+        </div>
+      </div>
+      <div id="contractor-groups"></div>
+      <div class="empty-state" id="sub-empty" hidden>No data yet — drop today's Production Scheduler export (Subcontractors) into Downloads.</div>
+      </div>
+    </section>
+
+    <section class="view" id="view-factory" hidden>
+      <div class="factory-toolbar">
+        <div class="segmented" id="factory-line-toggle">
+          <button class="segmented-btn" data-line="doors">Doors</button>
+          <button class="segmented-btn" data-line="cavities">Cavities</button>
+        </div>
+        <div class="segmented" id="factory-view-toggle">
+          <button class="segmented-btn" data-mode="day">By day</button>
+          <button class="segmented-btn" data-mode="all">All jobs</button>
+        </div>
+        <div class="segmented" id="factory-status-filter">
+          <button class="segmented-btn" data-status="in_production">In production</button>
+          <button class="segmented-btn" data-status="completed">Completed</button>
+          <button class="segmented-btn" data-status="all">All</button>
+        </div>
+        <span class="factory-reset-wrap" id="factory-reset-wrap" hidden>
+          <button class="btn btn-danger" id="factory-reset" disabled>Reset progress</button>
+          <span class="factory-reset-hint" id="factory-reset-hint"></span>
+        </span>
+      </div>
+      <div class="stat-row" id="factory-stats"></div>
+      <div class="factory-error" id="factory-error" hidden></div>
+      <div class="filter-bar">
+        <input type="search" class="search-input" id="factory-search" placeholder="Search PRO, order, customer, item…">
+        <span class="updated-at" id="factory-updated"></span>
+      </div>
+      <div id="factory-day" hidden>
+        <div class="schedule-nav">
+          <button class="btn" id="factory-day-prev">‹ Prev</button>
+          <span id="factory-day-label"></span>
+          <button class="btn" id="factory-day-next">Next ›</button>
+          <button class="btn" id="factory-day-today">Today</button>
+        </div>
+        <p class="leveling-note">Each bucket shows what's scheduled for this day. Anything not finished from earlier days rolls into today automatically. Only jobs dragged onto a day on the schedule appear here.</p>
+        <div id="factory-day-buckets"></div>
+      </div>
+      <div class="table-wrap" id="factory-table-wrap">
+        <table class="data-table factory-table" id="factory-table">
+          <thead></thead>
+          <tbody></tbody>
+        </table>
+        <div class="empty-state" id="factory-empty" hidden>No open jobs — everything on the floor is finished.</div>
+      </div>
+    </section>
+
+    <section class="view" id="view-labels" hidden>
+      <div class="labels-bar">
+        <label for="label-pro">Preview</label>
+        <select id="label-pro"></select>
+        <button class="btn" id="label-print-door">Print door labels</button>
+        <button class="btn" id="label-print-pallet">Print pallet labels</button>
+      </div>
+      <p class="leveling-note">Door labels and pallet labels are two rolls on two printers, so pick the matching ZD421 in the print dialog. Set <strong>Margins: None</strong> and <strong>Scale: 100%</strong>, and untick headers and footers; Chrome remembers it per printer. Both are shown below at their real size.</p>
+      <div class="doornum-bar" id="doornum-bar" hidden>
+        <span class="doornum-summary" id="doornum-summary"></span>
+        <button class="btn" id="doornum-start">Enter door numbers</button>
+        <button class="btn" id="doornum-import-open">Paste door numbers</button>
+        <button class="btn" id="joblist-import-open">Paste job names</button>
+      </div>
+      <details class="doornum-import" id="joblist-import" hidden>
+        <summary>Paste sales orders to get job names</summary>
+        <p class="doornum-import-help">Copy the rows straight out of the Sales Orders list in Business Central &mdash; headings and all &mdash; and paste them here. The order number and <strong>External Document No.</strong> are picked out and the rest ignored. Two columns, or <code>SO-181430: WACA</code> lines, work too.</p>
+        <pre class="doornum-import-eg">No.	Sell-to Customer Name	External Document No.
+SO-181430	IreAus Construction WA Pty Ltd	WACA - TIMBER DOORS STAGE 1</pre>
+        <textarea id="joblist-paste" rows="6" spellcheck="false" autocomplete="off" placeholder="Paste the Sales Orders rows here"></textarea>
+        <div class="doornum-import-actions">
+          <button type="button" class="btn btn-primary" id="joblist-import-go">Import</button>
+          <span class="doornum-or">or</span>
+          <button type="button" class="btn" id="joblist-file-btn">Upload the .xlsx</button>
+          <input type="file" id="joblist-file" accept=".xlsx,.xls,.csv" hidden>
+          <span class="doornum-import-result" id="joblist-import-result"></span>
+        </div>
+      </details>
+      <details class="doornum-import" id="doornum-import" hidden>
+        <summary>Paste door numbers from the job cards</summary>
+        <p class="doornum-import-help">One job per line, doors separated by commas, in door order. A dash leaves that door blank. Jobs not in the current export are skipped.</p>
+        <pre class="doornum-import-eg">PRO-328696: 103.1
+PRO-328697: 127.1, 127.2, 128.1, 128.2
+PRO-330659: L2.02, L2.02, L2.03, L2.03</pre>
+        <textarea id="doornum-paste" rows="8" spellcheck="false" autocomplete="off" placeholder="PRO-328696: 103.1"></textarea>
+        <div class="doornum-import-actions">
+          <button type="button" class="btn btn-primary" id="doornum-import-go">Import</button>
+          <span class="doornum-import-result" id="doornum-import-result"></span>
+        </div>
+      </details>
+      <div class="label-preview" id="label-preview"></div>
+      <div class="empty-state" id="labels-empty" hidden></div>
+    </section>
+
+    <section class="view" id="view-scheduling" hidden>
+      <div class="chart-card-head schedule-head">
+        <h2>Door schedule</h2>
+        <div class="capacity-controls">
+          <label class="capacity-label">
+            Press +d
+            <input type="number" class="num-input" id="offset-press" min="0" step="1" value="0">
+          </label>
+          <label class="capacity-label">
+            CNC +d
+            <input type="number" class="num-input" id="offset-cnc" min="0" step="1" value="1">
+          </label>
+        </div>
+      </div>
+      <p class="leveling-note">New work from an export waits in Holding, soonest due date first — drag it onto a day to schedule it. Days only show work someone has actually committed to. Dragging Make brings that job's Press and CNC along, CNC landing the day after. Solid cards are confirmed and print-ready; dashed CNC and Press cards follow their Make and firm up when you drag them. Drag anything back into Holding to set it aside. Finish isn't scheduled here for now.</p>
+      <div class="schedule-nav">
+        <button class="btn" id="schedule-prev">‹ Prev</button>
+        <span id="schedule-range"></span>
+        <button class="btn" id="schedule-next">Next ›</button>
+        <button class="btn" id="schedule-today">Today</button>
+        <button class="btn" id="schedule-huddle" title="Full screen for the morning huddle">⛶ Huddle view</button>
+        <span class="schedule-selection" id="schedule-selection" hidden>
+          <span id="schedule-selection-count"></span>
+          <button class="link-btn" id="schedule-selection-clear">Clear</button>
+        </span>
+      </div>
+      <div class="schedule-layout">
+        <div class="schedule-holding">
+          <div class="schedule-holding-head">
+            <span>Holding</span>
+            <span class="schedule-holding-count" id="schedule-holding-count"></span>
+          </div>
+          <input type="search" class="holding-search" id="schedule-holding-search"
+                 placeholder="Find SO or PRO…" autocomplete="off" spellcheck="false">
+          <div class="schedule-reset-bar">
+            <button class="btn btn-danger" id="schedule-reset" disabled>Reset selected days</button>
+            <span class="schedule-reset-hint" id="schedule-reset-hint">Tick a day's header to select it</span>
+          </div>
+          <div class="schedule-dropzone schedule-holding-zone" data-date="holding" id="schedule-holding-zone"></div>
+        </div>
+        <div class="board-scroller">
+          <!-- Scrolls the board from above it. The board is taller than the
+               screen, so its own scrollbar sits off the bottom of the page,
+               nowhere near the day headers you're trying to move between. -->
+          <div class="board-scroll-top" id="schedule-scroll-top" aria-hidden="true"><div></div></div>
+          <div class="schedule-board" id="schedule-board"></div>
+        </div>
+      </div>
+      <div class="empty-state" id="schedule-empty" hidden>No data yet — drop today's Production Scheduler export (Joinery) into Downloads.</div>
+    </section>
+
+    <section class="view" id="view-cavities" hidden>
+      <div class="chart-card-head schedule-head">
+        <h2>Cavities schedule</h2>
+        <span class="updated-at" id="cavities-updated"></span>
+      </div>
+      <p class="leveling-note">Cavities are built in-house at the other site on their own line, so they're planned separately from the doors. New work waits in Holding, soonest due first — drag it onto a day. Make follows Prep, and pulling a Prep back into Holding brings its Make with it.</p>
+      <div class="schedule-nav">
+        <button class="btn" id="cavities-prev">‹ Prev</button>
+        <span id="cavities-range"></span>
+        <button class="btn" id="cavities-next">Next ›</button>
+        <button class="btn" id="cavities-today">Today</button>
+      </div>
+      <div class="cav-error factory-error" id="cavities-error" hidden></div>
+      <div class="schedule-layout">
+        <div class="schedule-holding">
+          <div class="schedule-holding-head">
+            <span>Holding</span>
+            <span class="schedule-holding-count" id="cavities-holding-count"></span>
+          </div>
+          <input type="search" class="holding-search" id="cavities-holding-search"
+                 placeholder="Find SO or PRO…" autocomplete="off" spellcheck="false">
+          <div class="schedule-dropzone cav-dropzone schedule-holding-zone" data-date="holding" id="cavities-holding-zone"></div>
+        </div>
+        <div class="schedule-board" id="cavities-board"></div>
+      </div>
+      <div class="empty-state" id="cavities-empty" hidden></div>
+    </section>
+
+  </main>
+</div>
+
+<div class="readonly-banner" id="readonlyBanner" hidden>
+  Read only — <button type="button" class="link-btn" id="bannerSignIn">sign in</button> to make changes.
+</div>
+
+<div class="signin-backdrop" id="signinBackdrop" hidden>
+  <form class="signin-card" id="signinForm">
+    <h2>Sign in</h2>
+    <p class="signin-note">Anyone can view the dashboard. Signing in lets you change the schedule and record progress.</p>
+    <label>Name<input type="text" id="signinUser" autocomplete="username" required></label>
+    <label>Password<input type="password" id="signinPass" autocomplete="current-password" required></label>
+    <p class="signin-error" id="signinError" hidden></p>
+    <div class="signin-actions">
+      <button type="button" class="btn" id="signinCancel">Cancel</button>
+      <button type="submit" class="btn btn-primary" id="signinSubmit">Sign in</button>
+    </div>
+  </form>
+</div>
+
+<div class="signin-backdrop" id="accountsBackdrop" hidden>
+  <div class="signin-card accounts-card">
+    <h2>Accounts</h2>
+    <p class="signin-note">Anyone can view the board. These are the people who can change it — schedule work, record progress and upload exports.</p>
+
+    <p class="signin-note" id="accountAdminNote" hidden></p>
+    <ul class="account-list" id="accountList"></ul>
+
+    <form id="accountForm" class="account-form">
+      <h3>Add someone, or change a password</h3>
+      <label>Name<input type="text" id="accountUser" autocomplete="off" required></label>
+      <label>Password<input type="password" id="accountPass" autocomplete="new-password" minlength="8" required placeholder="At least 8 characters"></label>
+      <p class="signin-error" id="accountError" hidden></p>
+      <p class="signin-note" id="accountNote" hidden></p>
+      <div class="signin-actions">
+        <button type="submit" class="btn btn-primary" id="accountSave">Save</button>
+      </div>
+    </form>
+
+    <div class="signin-actions">
+      <button type="button" class="btn" id="accountsClose">Close</button>
+    </div>
+  </div>
+</div>
+
+<div class="signin-backdrop" id="noTouchBackdrop" hidden>
+  <div class="signin-card notouch-card">
+    <img class="notouch-img" id="noTouchImg" src="assets/no-touch.jpg" alt="" hidden>
+    <h2>Sorry Bruv</h2>
+    <p class="notouch-line">If you don't have a login it's look but don't touch&hellip;</p>
+    <div class="signin-actions">
+      <button type="button" class="btn" id="noTouchClose">Fair enough</button>
+      <button type="button" class="btn btn-primary" id="noTouchSignIn">Sign in</button>
+    </div>
+  </div>
+</div>
+
+<div class="signin-backdrop" id="wmBackdrop" hidden>
+  <div class="signin-card wm-card">
+    <h2 id="wmTitle">Warehouse movement</h2>
+    <p class="signin-note" id="wmFor" hidden></p>
+    <div class="wm-list" id="wmList"></div>
+    <div class="signin-actions">
+      <button type="button" class="btn" id="wmClose">Close</button>
+    </div>
+  </div>
+</div>
+
+<div class="signin-backdrop" id="doorNumBackdrop" hidden>
+  <div class="signin-card doornum-card">
+    <h2>Door numbers</h2>
+    <p class="signin-note" id="doorNumProgress"></p>
+    <div class="doornum-job" id="doorNumJob"></div>
+    <div class="doornum-fields" id="doorNumFields"></div>
+    <p class="signin-note">Type the mark for each door, or say it has none. Either answer stops this job being asked about again.</p>
+    <p class="signin-error" id="doorNumError" hidden></p>
+    <div class="signin-actions">
+      <button type="button" class="btn" id="doorNumClose">Close</button>
+      <button type="button" class="btn" id="doorNumSkip">Skip</button>
+      <button type="button" class="btn" id="doorNumNone">No door numbers</button>
+      <button type="button" class="btn btn-primary" id="doorNumSave">Save</button>
+    </div>
+  </div>
+</div>
+
+<div class="signin-backdrop" id="palletBackdrop" hidden>
+  <div class="signin-card pallet-card">
+    <h2>Pallet labels</h2>
+    <p class="signin-note" id="palletFor"></p>
+    <label for="palletCount">How many pallets were made?
+      <input type="number" id="palletCount" min="1" max="50" step="1" value="1" inputmode="numeric">
+    </label>
+    <p class="signin-note">One label per pallet, numbered 1/3, 2/3, 3/3 and so on.</p>
+    <p class="signin-error" id="palletErr" hidden></p>
+    <div class="signin-actions">
+      <button type="button" class="btn" id="palletCancel">Cancel</button>
+      <button type="button" class="btn btn-primary" id="palletGo">Print</button>
+    </div>
+  </div>
+</div>
+
+<div id="print-sheet"></div>
+
+<script src="app.js"></script>
+</body>
+</html>
