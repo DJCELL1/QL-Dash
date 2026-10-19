@@ -80,9 +80,9 @@
     // Hosted there's no Downloads folder to watch, so hide the button that scans it.
     $("#rescanBtn").hidden = !state.hasWatchFolder;
     for (const [id, what] of [
-      ["#joinery-empty", "Production Scheduler export (Joinery)"],
-      ["#sub-empty", "Production Scheduler export (Subcontractors)"],
-      ["#schedule-empty", "Production Scheduler export (Joinery)"],
+      ["#joinery-empty", "Production Scheduler export (Aluminium doors)"],
+      ["#sub-empty", "Production Scheduler export (Powdercoating)"],
+      ["#schedule-empty", "Production Scheduler export (Aluminium doors)"],
     ]) {
       const el = $(id);
       if (el) el.textContent = noDataMessage(what);
@@ -1755,7 +1755,7 @@
     const data = state.data.subBoard;
 
     if (!data || !data.jobs) {
-      boardsEl.innerHTML = `<div class="empty-state">${escapeAttr(noDataMessage("subcontractor export"))}</div>`;
+      boardsEl.innerHTML = `<div class="empty-state">${escapeAttr(noDataMessage("powdercoating export"))}</div>`;
       updatedEl.textContent = "";
       return;
     }
@@ -1853,7 +1853,7 @@
     const active = jobs.filter((j) => RUN_SHEET_SECTIONS.some((s) => s.id === j.status));
     const lateCount = active.filter((j) => j.overdue).length;
 
-    let html = printHeaderHTML("Subcontractor run sheet", contractorName, [
+    let html = printHeaderHTML("Powdercoating run sheet", contractorName, [
       `<strong>${now.toLocaleDateString(undefined, { weekday: "long", day: "2-digit", month: "long", year: "numeric" })}</strong>`,
       `Printed ${now.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}`,
     ]);
@@ -2054,7 +2054,7 @@
       progressUrl: "/api/factory/progress",
       unit: ["door", "doors"],
       stagesText: "Make, Press, CNC and Finish",
-      exportName: "Production Scheduler export (Joinery)",
+      exportName: "Production Scheduler export (Aluminium doors)",
       labels: true,
     };
   }
@@ -3958,7 +3958,7 @@
       return;
     }
     const parts = Object.entries(status.datasets).map(([ds, snap]) => {
-      const label = ds === "joinery" ? "Joinery" : ds === "subcontractors" ? "Subs" : ds;
+      const label = ds === "joinery" ? "Doors" : ds === "subcontractors" ? "Powdercoat" : ds;
       return `${label}: ${snap.snapshot_date}`;
     });
     el.textContent = parts.length ? `Latest data — ${parts.join(" · ")}` : "No data ingested yet";
@@ -4690,7 +4690,7 @@
       sel.innerHTML = "";
       preview.innerHTML = "";
       empty.hidden = false;
-      empty.textContent = noDataMessage("Production Scheduler export (Joinery)");
+      empty.textContent = noDataMessage("Production Scheduler export (Aluminium doors)");
       return;
     }
     empty.hidden = true;
