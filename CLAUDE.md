@@ -61,6 +61,31 @@ database lives on the volume and is never recreated, so **schema changes go in
 string alone does nothing to an existing database, because every table is
 `CREATE TABLE IF NOT EXISTS`.
 
+## Datasets and routing
+
+`classify_dataset()` in `backend/ingest.py` maps an export's work centre group
+onto one of three dataset keys. Those keys are **historical names and do not
+match what they hold**:
+
+| Group code | Dataset key | Shown as |
+|---|---|---|
+| `ALU-DOOR-Q`, `JOINERY…` | `joinery` | Aluminium doors (also Factory floor, Door schedule) |
+| `PC-Q`, `SUB…` | `subcontractors` | Powdercoating |
+| `CAVITIES-Q`, `CAVITIES-W` | `cavities` | Cavities schedule |
+
+Queensland codes end `-Q`, WA's are the older prefixes; both are kept so one
+deploy serves either site. Don't rename the keys to match the labels without
+migrating stored snapshots, sub statuses and day plans along with them.
+
+An unrecognised group falls through to a dataset named after itself, which no
+tab reads. Nothing errors — the data simply never appears. A new work centre
+group has to be added to `classify_dataset()`.
+
+`_pro_totals()` defaults to the `joinery` dataset, so Factory floor and Door
+schedule read the doors. Powdercoating is in house at Queensland: the board
+shows no purchase-order tracking, and `PC-10-Q` is mapped to a display name in
+`SUB_CONTRACTOR_NAMES` even though it isn't a contractor.
+
 ## Auth
 
 Signed cookie `prodash_session`, 30 days. Reading is open to anyone with the

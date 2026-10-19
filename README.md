@@ -32,16 +32,21 @@ Running locally instead:
 
 ## How exports are sorted
 
-Each export is routed by its `Work Centre Group Filter` column:
+Each export is routed by its work centre group column. BC writes the header as
+`Work Center Group Code Filter`; older exports say `Work Centre Group Filter`,
+and both are accepted.
 
-- `CAVITIES…` → **Cavities schedule**
-- `SUB…` → the **Subcontractors** board
-- `JOINERY…` → the **Joinery** tab
-- anything else → a dataset named after the group itself, which is how
-  `POWDERLINE` arrives and gets merged onto the subcontractor board
+| Group code | Lands in |
+|---|---|
+| `ALU-DOOR-Q` | **Aluminium doors**, and feeds Factory floor and Door schedule |
+| `PC-Q` | **Powdercoating** |
+| `CAVITIES-Q` | **Cavities schedule** |
 
-Those rules came from the original WA site. They still need aligning to
-Queensland's work centre groups — see the note at the bottom.
+The WA codes (`JOINERY…`, `SUB…`, `CAVITIES-W`) still route to the same three
+places, so one deploy can serve both sites. Anything unrecognised becomes a
+dataset named after the group, which no tab reads — so a new group code has to
+be added to `classify_dataset()` in `backend/ingest.py` or its data goes
+nowhere, silently.
 
 ## What it tracks
 
@@ -59,11 +64,10 @@ Queensland's work centre groups — see the note at the bottom.
 - `DEPLOY.md` — Railway and Cloudflare setup
 - `CLAUDE.md` — notes for anyone working on the code
 
-## Known gap
+## A naming wrinkle
 
-The tabs and the sorting rules above still carry the original site's shape:
-there's a **Joinery** tab and a **Subcontractors** board built around WA
-contractors (Elaw, WA Anodisers, Wenco), neither of which matches what
-Queensland actually runs. Aligning them needs a sample Queensland export so the
-`Work Centre Group Filter` values can be mapped correctly — guessing would route
-data to a dataset no tab reads.
+The three datasets are stored under the names the original WA site gave them:
+`joinery` holds the **aluminium doors**, and `subcontractors` holds the
+**powdercoating**. Only the labels were changed, so any history already
+recorded still lines up. Worth knowing before you go looking for a `doors`
+table that doesn't exist.

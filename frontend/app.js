@@ -3925,8 +3925,9 @@
       el.textContent = "No data ingested yet";
       return;
     }
+    const DATASET_LABELS = { joinery: "Doors", subcontractors: "Powdercoat", cavities: "Cavities" };
     const parts = Object.entries(status.datasets).map(([ds, snap]) => {
-      const label = ds === "joinery" ? "Doors" : ds === "subcontractors" ? "Powdercoat" : ds;
+      const label = DATASET_LABELS[ds] || ds;
       return `${label}: ${snap.snapshot_date}`;
     });
     el.textContent = parts.length ? `Latest data — ${parts.join(" · ")}` : "No data ingested yet";
@@ -4857,7 +4858,7 @@
 
   // ---------- cavities ----------
   //
-  // Built in-house at the other site on their own two-step line, so they get the
+  // Built in-house on their own two-step line, so they get the
   // same board as the doors but planned separately — their units would otherwise
   // distort the doors-per-day capacity everything else runs on.
 

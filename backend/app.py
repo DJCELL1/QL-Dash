@@ -1419,6 +1419,9 @@ SUB_CONTRACTOR_NAMES = {
     "SUB-ANODISERS": "WA Anodisers",
     "POWDERLINE": "Powderline",
     "SUB-WENCO": "Wenco",
+    # Queensland coats in house, so this one is a work centre of ours rather
+    # than a contractor. It still groups the board the same way.
+    "PC-10-Q": "Powdercoating",
 }
 
 

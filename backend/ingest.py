@@ -76,11 +76,14 @@ def classify_dataset(work_centre_group: str | None) -> str:
     if not work_centre_group:
         return "other"
     g = str(work_centre_group).strip().upper()
-    if g.startswith("JOINERY"):
+    # Each site names its groups differently, so match on prefix and fold them
+    # onto the same three datasets the tabs read. Queensland sends ALU-DOOR-Q,
+    # PC-Q and CAVITIES-Q; WA sends JOINERY..., SUB... and CAVITIES-W.
+    # The dataset keys stay as they were so stored history still lines up.
+    if g.startswith("JOINERY") or g.startswith("ALU-DOOR"):
         return "joinery"
-    if g.startswith("SUB"):
+    if g.startswith("SUB") or g == "PC" or g.startswith("PC-"):
         return "subcontractors"
-    # Cavities come off a different site and BC labels the group CAVITIES-W.
     # Match on the prefix so a change of suffix doesn't quietly start a second
     # dataset that no tab is reading.
     if g.startswith("CAVITIES"):
