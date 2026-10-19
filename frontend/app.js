@@ -1365,9 +1365,7 @@
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const late = eta < today;
-    // flag when the date came straight from BC's PO rather than being confirmed by us
-    const src = job.eta_from_po ? '<span class="sub-eta-src" title="From the purchase order — not yet confirmed">PO</span>' : "";
-    return `<span class="${late ? "sub-eta-late" : ""}">ETA ${fmtDate(job.eta_date)}</span>${src}`;
+    return `<span class="${late ? "sub-eta-late" : ""}">ETA ${fmtDate(job.eta_date)}</span>`;
   }
 
   function subCardHTML(job) {
@@ -1380,25 +1378,8 @@
     const showEta = job.status === "at_sub";
     const noteHtml = job.eta_note ? `<div class="sub-card-note" title="${escapeAttr(job.eta_note)}">${job.eta_note}</div>` : "";
 
-    // BC says this PO is fully received, but the board still has it out at the sub
-    const receivedFlag =
-      job.po_received && job.status === "at_sub"
-        ? '<div class="sub-card-alert">BC says this PO is fully received — move to Ready?</div>'
-        : "";
-    // only chase paperwork where it still matters — a closed PO ageing out of the
-    // export on an already-finished job isn't worth flagging
-    const chaseable = job.status === "ready_despatch" || job.status === "at_sub";
-    const unmatchedFlag =
-      chaseable && (job.po_unmatched || []).length
-        ? `<div class="sub-card-warn">${job.po_unmatched.join(", ")} not in the PO export</div>`
-        : "";
-    const noPoFlag = chaseable && !job.sub_po ? '<div class="sub-card-warn">No PO raised</div>' : "";
-
-    const poLine = job.po
-      ? `<div class="sub-card-muted">Raised ${fmtDate(job.po.order_date)}${
-          job.days_out !== null && job.days_out !== undefined ? ` · <b>${job.days_out}d out</b>` : ""
-        }${job.po.value_incl_gst ? ` · $${fmtNum(job.po.value_incl_gst)}` : ""}</div>`
-      : "";
+    // Coating is done in house, so no purchase order sits behind any of this:
+    // no PO line, no missing-PO warning, no "received in BC" chase.
 
     return `<div class="sub-card" draggable="true"
       data-pro="${job.prod_order_no}" data-wc="${job.work_centre_no}" data-status="${job.status}">
@@ -1410,10 +1391,8 @@
       <div class="sub-card-line">${customerLabel(job.source_name)}</div>
       <div class="sub-card-muted">${job.item_description || ""}</div>
       ${job.colour_description ? `<div class="sub-card-muted">${job.colour_description}</div>` : ""}
-      <div class="sub-card-muted">${job.sub_po ? job.sub_po + " · " : ""}${job.operation_name || ""}</div>
-      ${poLine}
+      <div class="sub-card-muted">${job.operation_name || ""}</div>
       <div class="sub-card-muted">${dueTxt} ${showEta ? "· " + subEtaCell(job) : ""}</div>
-      ${receivedFlag}${unmatchedFlag}${noPoFlag}
       ${noteHtml}
       ${
         showEta
@@ -1789,24 +1768,13 @@
         }).join("");
 
         const outCount = c.jobs.filter((j) => j.status === "at_sub").length;
-        const receivedStale = c.jobs.filter((j) => j.status === "at_sub" && j.po_received).length;
-        const outstandingValue = c.jobs
-          .filter((j) => j.status === "at_sub" && j.po)
-          .reduce((s, j) => s + (j.po.value_incl_gst || 0), 0);
 
         const logo = CONTRACTOR_LOGOS[c.wc];
         return `<div class="sub-contractor">
           <div class="sub-contractor-head">
             ${logo ? `<span class="sub-logo"><img src="${logo}" alt="${escapeAttr(c.name)} logo"></span>` : ""}
             <h3>${c.name}</h3>
-            <span class="sub-meta">${c.jobs.length} jobs · ${outCount} out at sub${
-              outstandingValue ? ` · $${fmtNum(Math.round(outstandingValue))} out` : ""
-            }</span>
-            ${
-              receivedStale
-                ? `<span class="sub-badge-alert" title="BC shows these purchase orders as fully received">${receivedStale} received in BC</span>`
-                : ""
-            }
+            <span class="sub-meta">${c.jobs.length} jobs · ${outCount} in powdercoating</span>
             <button class="btn sub-runsheet-btn" data-wc="${c.wc}" data-contractor="${escapeAttr(c.name)}">Print run sheet</button>
           </div>
           <div class="sub-lanes">${lanes}</div>
@@ -1900,7 +1868,7 @@
             <td class="col-seq">${seq}</td>
             <td class="col-key">${j.prod_order_no}<span class="cell-sub">${soLabel(j.sales_order_no)}</span></td>
             <td>${customerLabel(j.source_name)}</td>
-            <td>${j.item_description || "—"}${j.sub_po ? `<span class="cell-sub">${j.sub_po}</span>` : ""}</td>
+            <td>${j.item_description || "—"}</td>
             <td>${j.colour_description || "—"}</td>
             <td class="col-num">${fmtNum(j.remaining_qty || j.qty)}<span class="cell-sub">${j.uom || "EA"}</span></td>
             <td class="col-date">${dueCellHTML(j)}</td>
