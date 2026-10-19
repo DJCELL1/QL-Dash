@@ -93,7 +93,7 @@ def _watch_folder() -> Path | None:
 
 WATCH_FOLDER = _watch_folder()
 
-app = FastAPI(title="Production Scheduler Dashboard")
+app = FastAPI(title="Queensland Production Dashboard")
 
 
 @app.middleware("http")

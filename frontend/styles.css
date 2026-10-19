@@ -1,15 +1,23 @@
 :root {
   color-scheme: light;
-  --surface-1:      #fcfcfb;
-  --page-plane:     #f9f9f7;
-  --text-primary:   #0b0b0b;
-  --text-secondary: #52514e;
-  --text-muted:     #898781;
-  --gridline:       #e1e0d9;
-  --baseline:       #c3c2b7;
-  --border:         rgba(11,11,11,0.10);
-  --series-1:       #2a78d6;
-  --series-2:       #eb6834;
+  /* Criterion Industries brand palette — Brand Guidelines 2024, pg 18-19.
+     Status colours below are deliberately NOT brand greys: a shortage has to
+     read as red across the factory floor, which no grey can do. */
+  --surface-1:      #f7f7fb;              /* Pure White */
+  --page-plane:     #e5e5e5;              /* Light Grey */
+  --text-primary:   #2f2f2f;              /* Charcoal */
+  --text-secondary: #565855;              /* Medium Grey */
+  --text-muted:     #868e94;              /* Grey stepped toward Platinum */
+  --gridline:       #dfe3e6;              /* Platinum tint, for hairlines and chips */
+  --baseline:       #b7c2cb;              /* Platinum */
+  --border:         rgba(47,47,47,0.12);
+  --series-1:       #637a90;              /* French Grey — the brand accent */
+  --series-2:       #424f59;              /* Slate Grey */
+
+  /* French Grey on Pure White is a sanctioned pairing (pg 06); pinned here so
+     filled controls keep legible contrast in both themes. */
+  --accent-solid:   #637a90;
+  --accent-on:      #f7f7fb;
 
   --status-good:     #0ca30c;
   --status-warning:  #fab219;
@@ -22,16 +30,16 @@
 @media (prefers-color-scheme: dark) {
   :root:where(:not([data-theme="light"])) {
     color-scheme: dark;
-    --surface-1:      #1a1a19;
-    --page-plane:     #0d0d0d;
-    --text-primary:   #ffffff;
-    --text-secondary: #c3c2b7;
-    --text-muted:     #898781;
-    --gridline:       #2c2c2a;
-    --baseline:       #383835;
-    --border:         rgba(255,255,255,0.10);
-    --series-1:       #3987e5;
-    --series-2:       #d95926;
+    --surface-1:      #3d3d3d;              /* Dark Grey */
+    --page-plane:     #2f2f2f;              /* Charcoal */
+    --text-primary:   #f7f7fb;              /* Pure White */
+    --text-secondary: #b7c2cb;              /* Platinum */
+    --text-muted:     #8d9399;              /* Platinum stepped down */
+    --gridline:       #4a4a4a;
+    --baseline:       #606161;              /* Grey */
+    --border:         rgba(247,247,251,0.12);
+    --series-1:       #8ea1b4;              /* French Grey, lifted to read on Charcoal */
+    --series-2:       #b7c2cb;              /* Platinum */
 
     --status-good:     #0ca30c;
     --status-warning:  #fab219;
@@ -43,16 +51,16 @@
 }
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --surface-1:      #1a1a19;
-  --page-plane:     #0d0d0d;
-  --text-primary:   #ffffff;
-  --text-secondary: #c3c2b7;
-  --text-muted:     #898781;
-  --gridline:       #2c2c2a;
-  --baseline:       #383835;
-  --border:         rgba(255,255,255,0.10);
-  --series-1:       #3987e5;
-  --series-2:       #d95926;
+  --surface-1:      #3d3d3d;              /* Dark Grey */
+  --page-plane:     #2f2f2f;              /* Charcoal */
+  --text-primary:   #f7f7fb;              /* Pure White */
+  --text-secondary: #b7c2cb;              /* Platinum */
+  --text-muted:     #8d9399;              /* Platinum stepped down */
+  --gridline:       #4a4a4a;
+  --baseline:       #606161;              /* Grey */
+  --border:         rgba(247,247,251,0.12);
+  --series-1:       #8ea1b4;              /* French Grey, lifted to read on Charcoal */
+  --series-2:       #b7c2cb;              /* Platinum */
   --status-good:     #0ca30c;
   --status-warning:  #fab219;
   --status-serious:  #ec835a;
@@ -68,7 +76,7 @@ html, body {
   padding: 0;
   background: var(--page-plane);
   color: var(--text-primary);
-  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-family: "Roboto", system-ui, -apple-system, "Segoe UI", sans-serif;
   font-size: 14px;
   -webkit-font-smoothing: antialiased;
 }
@@ -92,7 +100,29 @@ html, body {
 .topbar-left { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; }
 .topbar-right { display: flex; align-items: center; gap: 12px; }
 
-h1 { font-size: 17px; font-weight: 700; margin: 0; white-space: nowrap; }
+/* The brand sets headings in Swis721 BT Black, all caps. That face can't be
+   embedded on the web, so this uses Roboto Black — the guidelines' own
+   sanctioned alternative (pg 16) for exactly this situation. */
+h1 {
+  font-size: 15px;
+  font-weight: 900;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  margin: 0;
+  white-space: nowrap;
+}
+
+/* Logo lockup. The guidelines require clear space of one 'C' height around the
+   logo before any text, which the gap and padding below hold. */
+.brand { display: flex; align-items: center; gap: 14px; }
+.brand-logo { height: 24px; width: auto; display: block; flex: 0 0 auto; }
+
+/* The supplied asset is the black linear logo. White is a permitted treatment
+   (pg 10, misuse #8), so it's flipped rather than tinted on dark surfaces. */
+:root[data-theme="dark"] .brand-logo { filter: brightness(0) invert(1); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .brand-logo { filter: brightness(0) invert(1); }
+}
 
 .tabs { display: flex; gap: 4px; }
 
@@ -107,7 +137,7 @@ h1 { font-size: 17px; font-weight: 700; margin: 0; white-space: nowrap; }
   cursor: pointer;
 }
 .tab-btn:hover { background: var(--gridline); }
-.tab-btn.is-active { background: var(--series-1); color: #fff; }
+.tab-btn.is-active { background: var(--accent-solid); color: var(--accent-on); }
 
 .updated-at { font-size: 12px; color: var(--text-muted); white-space: nowrap; }
 
@@ -1081,7 +1111,7 @@ body.is-board-view main { max-width: none; }
 #print-sheet {
   display: none;
   color: #000;
-  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-family: "Roboto", system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 
 .print-header {

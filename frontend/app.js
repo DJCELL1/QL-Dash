@@ -1835,7 +1835,7 @@
 
   function printFooterHTML(signoffLabels) {
     return `<div class="print-footer">
-      <div>Production Dashboard · figures reflect quantities still outstanding</div>
+      <div>Queensland Production Dashboard · figures reflect quantities still outstanding</div>
       <div class="print-signoff">${signoffLabels.map((l) => `<span>${l}: </span>`).join("")}</div>
     </div>`;
   }

@@ -5,14 +5,17 @@
 
 :root {
   color-scheme: light;
-  --surface:      #fcfcfb;
-  --plane:        #f2f1ec;
-  --ink:          #0b0b0b;
-  --ink-2:        #52514e;
-  --ink-3:        #898781;
-  --line:         #d9d8d0;
-  --accent:       #2a78d6;
-  --accent-ink:   #1c5aa6;
+  /* Criterion Industries brand palette — Brand Guidelines 2024, pg 18-19.
+     The good/warn/critical colours below stay as they are on purpose: the
+     board is read at distance and status has to carry on colour alone. */
+  --surface:      #f7f7fb;                /* Pure White */
+  --plane:        #e5e5e5;                /* Light Grey */
+  --ink:          #2f2f2f;                /* Charcoal */
+  --ink-2:        #565855;                /* Medium Grey */
+  --ink-3:        #868e94;                /* Grey stepped toward Platinum */
+  --line:         #cdd4da;                /* Platinum tint */
+  --accent:       #637a90;                /* French Grey — the brand accent */
+  --accent-ink:   #42535f;                /* French Grey darkened for text */
   --good:         #0ca30c;
   --good-ink:     #006300;
   --good-bg:      #e7f4e7;
@@ -25,14 +28,14 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     color-scheme: dark;
-    --surface:     #1a1a19;
-    --plane:       #0d0d0d;
-    --ink:         #ffffff;
-    --ink-2:       #c3c2b7;
-    --ink-3:       #898781;
-    --line:        #34342f;
-    --accent:      #3987e5;
-    --accent-ink:  #8bbaf5;
+    --surface:     #3d3d3d;                /* Dark Grey */
+    --plane:       #2f2f2f;                /* Charcoal */
+    --ink:         #f7f7fb;                /* Pure White */
+    --ink-2:       #b7c2cb;                /* Platinum */
+    --ink-3:       #8d9399;
+    --line:        #4a4a4a;
+    --accent:      #8ea1b4;                /* French Grey, lifted on Charcoal */
+    --accent-ink:  #b7c2cb;                /* Platinum */
     --good:        #0ca30c;
     --good-ink:    #4cc44c;
     --good-bg:     #13240f;
@@ -50,7 +53,7 @@ html, body {
   padding: 0;
   background: var(--plane);
   color: var(--ink);
-  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-family: "Roboto", system-ui, -apple-system, "Segoe UI", sans-serif;
   font-size: 16px;
   -webkit-font-smoothing: antialiased;
   -webkit-tap-highlight-color: transparent;
@@ -79,7 +82,20 @@ html, body {
 }
 
 .bar-top { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
-.bar-title { font-size: 17px; font-weight: 700; letter-spacing: -0.01em; }
+.bar-title {
+  font-size: 16px;
+  font-weight: 900;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+/* The bar aligns on the baseline, so the logo is centred against it by hand.
+   Black artwork flips to white on dark surfaces — a permitted treatment. */
+.bar-logo { height: 21px; width: auto; align-self: center; flex: 0 0 auto; margin-right: 12px; }
+:root[data-theme="dark"] .bar-logo { filter: brightness(0) invert(1); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .bar-logo { filter: brightness(0) invert(1); }
+}
 .bar-date { font-size: 13px; color: var(--ink-3); font-weight: 600; }
 
 .scanrow { display: flex; gap: 8px; }
