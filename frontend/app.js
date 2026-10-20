@@ -4063,6 +4063,78 @@
     return { hours, unpriced };
   }
 
+  // ---------- auto-scheduling ----------
+
+  // Which line the board in front of you belongs to.
+  const boardLine = () => (state.view === "cavities" ? "cavities" : "doors");
+
+  function summarisePlacement(res) {
+    const byDay = new Map();
+    for (const p of res.placed) byDay.set(p.date, (byDay.get(p.date) || 0) + 1);
+    const lines = [`Placed ${res.placed.length} job${res.placed.length === 1 ? "" : "s"}.`];
+    if (res.replanned) lines.push(`Cleared and re-planned ${res.replanned}.`);
+    for (const [day, n] of [...byDay].sort()) lines.push(`  ${fmtDate(day)} — ${n} job${n === 1 ? "" : "s"}`);
+    if (res.skipped.length) {
+      lines.push(`Left in Holding: ${res.skipped.length}`);
+      const why = new Map();
+      for (const s of res.skipped) why.set(s.why, (why.get(s.why) || 0) + 1);
+      for (const [reason, n] of why) lines.push(`  ${n} — ${reason}`);
+    }
+    return lines.join("\n");
+  }
+
+  async function afterPlacing(res) {
+    await Promise.all([loadSchedule(), loadFactory(), loadCavities()]);
+    render();
+    alert(summarisePlacement(res));
+  }
+
+  function wireAutoSchedule() {
+    const backdrop = $("#autoBackdrop");
+    const close = () => { backdrop.hidden = true; $("#auto-result").hidden = true; };
+
+    $("#schedule-auto").onclick = () => {
+      const r = defaultEffRange();
+      $("#auto-from").value = dateKey(new Date());
+      $("#auto-to").value = dateKey(addBusinessDays(new Date(), 9));
+      $("#auto-replan").checked = false;
+      $("#auto-result").hidden = true;
+      backdrop.hidden = false;
+    };
+    $("#auto-cancel").onclick = close;
+    backdrop.addEventListener("click", (e) => { if (e.target === backdrop) close(); });
+
+    $("#autoForm").onsubmit = async (e) => {
+      e.preventDefault();
+      const go = $("#auto-go");
+      go.disabled = true;
+      try {
+        const res = await postJSON("/api/schedule/auto", {
+          line: boardLine(),
+          date_from: $("#auto-from").value,
+          date_to: $("#auto-to").value,
+          replan: $("#auto-replan").checked,
+        });
+        close();
+        await afterPlacing(res);
+      } catch (err) {
+        notifyError(err, "Couldn't auto-schedule.");
+      } finally {
+        go.disabled = false;
+      }
+    };
+
+    $("#schedule-bc").onclick = async () => {
+      if (!confirm("Put everything still in Holding on the date Business Central gives it?\n\nHours aren't checked, so a day can end up over capacity — the lane totals will show where.")) return;
+      try {
+        const res = await postJSON("/api/schedule/bc-dates", { line: boardLine() });
+        await afterPlacing(res);
+      } catch (err) {
+        notifyError(err, "Couldn't place those.");
+      }
+    };
+  }
+
   // ---------- unit tracker ----------
 
   // Which endpoint records a tick for this job's line.
@@ -6590,6 +6662,7 @@
   wireHoldingSearch("#schedule-holding-search", "schedule", renderScheduling);
   wireHuddle();
   wireGantt();
+  wireAutoSchedule();
   wireUnitTracker();
   wireCavities();
   wireFactoryDayNav();

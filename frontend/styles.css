@@ -2284,3 +2284,12 @@ body.is-gantt-open { overflow: hidden; }
   border-color: var(--card-done-line);
   color: var(--success-text);
 }
+
+/* ---------- auto-schedule dialog ---------- */
+
+.auto-card { width: min(460px, 94vw); }
+.auto-check { display: flex; align-items: center; gap: 8px; font-size: 13px; margin: 6px 0 2px; }
+.auto-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+.btn-primary { background: var(--accent-solid); color: var(--accent-on); border-color: var(--accent-solid); }
+.btn-primary:hover:not(:disabled) { filter: brightness(1.08); }
+.auto-result { margin-top: 10px; font-size: 12px; white-space: pre-line; color: var(--text-secondary); }

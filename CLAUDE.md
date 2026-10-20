@@ -229,6 +229,31 @@ they get a quantity box instead.
 A rule worth remembering: a CSS class that sets `display` beats the `hidden`
 attribute. Both overlays carry an explicit `[hidden] { display: none; }`.
 
+## Auto-scheduling
+
+Two endpoints, both placing only the **first** step of a line. The board
+derives every step after it from that anchor and the day offsets, so placing
+them here would fight it.
+
+`POST /api/schedule/auto` takes a line, a date range and `replan`. Candidates
+are whatever still has quantity left to schedule, soonest due date first, each
+landing on the first day in the range with enough minutes left at that step.
+Capacity per day is hours available x 60, less what is already booked there.
+Anything that doesn't fit is returned in `skipped` with a reason and stays in
+Holding - it is never forced onto a day it can't be done on.
+
+`replan` clears bookings in the range **only where nothing has been ticked**.
+Work the floor has started keeps its day, and its load still counts against
+that day's capacity.
+
+`POST /api/schedule/bc-dates` puts everything in Holding on its own BC date,
+taken literally rather than backed off by the lead time. A date already past
+lands on today, and hours are not checked - the lane totals show where that
+overloads a day.
+
+Both refuse a line with no schedulable first step, which is how powdercoating
+is turned away.
+
 ## Auth
 
 Signed cookie `prodash_session`, 30 days. Reading is open to anyone with the

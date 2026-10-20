@@ -272,6 +272,8 @@ PRO-330659: L2.02, L2.02, L2.03, L2.03</pre>
         <span id="schedule-range"></span>
         <button class="btn" id="schedule-next">Next ›</button>
         <button class="btn" id="schedule-today">Today</button>
+        <button class="btn" id="schedule-auto">Auto-schedule…</button>
+        <button class="btn" id="schedule-bc">Place holding on BC dates</button>
         <button class="btn" id="schedule-huddle" title="Full screen for the morning huddle">⛶ Huddle view</button>
         <span class="schedule-selection" id="schedule-selection" hidden>
           <span id="schedule-selection-count"></span>
@@ -420,6 +422,21 @@ PRO-330659: L2.02, L2.02, L2.03, L2.03</pre>
 
 <div class="readonly-banner" id="readonlyBanner" hidden>
   Read only — <button type="button" class="link-btn" id="bannerSignIn">sign in</button> to make changes.
+</div>
+
+<div class="signin-backdrop" id="autoBackdrop" hidden>
+  <form class="signin-card auto-card" id="autoForm">
+    <h2>AUTO-SCHEDULE.</h2>
+    <p class="leveling-note">Places whatever is still in Holding, soonest due date first, on the first day with enough hours at the first step. Anything that doesn't fit stays in Holding, and everything placed can still be dragged.</p>
+    <label class="capacity-label">From <input type="date" class="num-input" id="auto-from" required></label>
+    <label class="capacity-label">To <input type="date" class="num-input" id="auto-to" required></label>
+    <label class="auto-check"><input type="checkbox" id="auto-replan"> Re-plan jobs in this range that haven't been started</label>
+    <div class="auto-actions">
+      <button class="btn" type="button" id="auto-cancel">Cancel</button>
+      <button class="btn btn-primary" type="submit" id="auto-go">Schedule</button>
+    </div>
+    <div class="auto-result" id="auto-result" hidden></div>
+  </form>
 </div>
 
 <div class="signin-backdrop tracker-backdrop" id="trackerBackdrop" hidden>

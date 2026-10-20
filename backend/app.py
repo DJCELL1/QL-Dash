@@ -5,7 +5,7 @@ import logging
 import os
 import re
 import tempfile
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 from fastapi import FastAPI, File, HTTPException, Request, Response, UploadFile
@@ -42,6 +42,7 @@ from db import (
     delete_day_override,
     get_day_overrides,
     get_product_minutes,
+    delete_schedule_entry,
     get_actual_hours,
     get_all_schedule_entries,
     get_progress_events,
@@ -2092,6 +2093,197 @@ def api_set_planning(request: Request, body: PlanningIn):
     set_setting("planning", json.dumps(merged))
     write_audit(actor(request), "settings.planning", ", ".join(sorted(body.values)))
     return merged
+
+
+# ---------- auto-scheduling ----------
+
+
+def _business_days(date_from: str, date_to: str, stage: str, hours: dict, overrides: dict) -> list[str]:
+    """Days in the range that the step is actually open on, soonest first."""
+    out = []
+    cursor = date.fromisoformat(date_from)
+    last = date.fromisoformat(date_to)
+    while cursor <= last:
+        key = cursor.isoformat()
+        if hours_available_on(key, stage, hours, overrides) > 0:
+            out.append(key)
+        cursor += timedelta(days=1)
+    return out
+
+
+def _first_stage(line_id: str) -> str:
+    line = LINES.get(line_id)
+    if not line:
+        raise HTTPException(status_code=400, detail=f"Unknown line '{line_id}'.")
+    if not line["stages"]:
+        raise HTTPException(status_code=400, detail=f"{line['label']} has no steps.")
+    return line["stages"][0]
+
+
+def _placement_context(line_id: str):
+    """Everything placing a job needs: the step, what's left, and the day loads."""
+    stage = _first_stage(line_id)
+    if stage not in SCHEDULABLE_STAGES:
+        raise HTTPException(status_code=400, detail=f"{LINES[line_id]['label']} isn't scheduled on a board.")
+    grouped = _pro_totals(LINES[line_id]["dataset"])[1]
+    progress = get_all_stage_progress()
+    lookup = minutes_lookup()
+    minutes = {pro: _minutes_for(g, (stage,), lookup).get(stage) for pro, g in grouped.items()}
+    return stage, grouped, progress, minutes
+
+
+def _day_load(stage: str) -> dict[str, float]:
+    """Minutes already booked at a step, per day."""
+    lookup = minutes_lookup()
+    per_pro = {}
+    for line in LINES.values():
+        if stage in line["stages"]:
+            for pro, g in _pro_totals(line["dataset"])[1].items():
+                per_pro[pro] = _minutes_for(g, (stage,), lookup).get(stage)
+    load: dict[str, float] = {}
+    for e in get_all_schedule_entries():
+        if e["stage"] != stage or e["scheduled_date"] == HOLDING_DATE:
+            continue
+        mins = per_pro.get(e["prod_order_no"])
+        if mins:
+            load[e["scheduled_date"]] = load.get(e["scheduled_date"], 0.0) + (e["qty"] or 0) * mins
+    return load
+
+
+class AutoScheduleIn(BaseModel):
+    line: str = "doors"
+    date_from: str
+    date_to: str
+    replan: bool = False
+
+
+@app.post("/api/schedule/auto")
+def api_auto_schedule(request: Request, body: AutoScheduleIn):
+    """Fill the range soonest-due first, on the first day with room.
+
+    Only the first step is placed. The board derives the steps after it from
+    that anchor and the day offsets, so placing them here would fight it.
+    Anything that doesn't fit is left in Holding rather than forced onto a day
+    it can't be done on, and everything placed stays draggable afterwards.
+    """
+    try:
+        date.fromisoformat(body.date_from), date.fromisoformat(body.date_to)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Dates must be YYYY-MM-DD.")
+    if body.date_to < body.date_from:
+        raise HTTPException(status_code=400, detail="The end date is before the start date.")
+
+    stage, grouped, progress, minutes = _placement_context(body.line)
+
+    replanned = 0
+    if body.replan:
+        # Only jobs nobody has started: moving work the floor has already begun
+        # would be rescheduling something that is happening.
+        for e in get_all_schedule_entries():
+            if e["stage"] != stage or not (body.date_from <= e["scheduled_date"] <= body.date_to):
+                continue
+            done = (progress.get(e["prod_order_no"], {}) or {}).get(f"{stage}_done", 0) or 0
+            if done == 0:
+                delete_schedule_entry(e["id"])
+                replanned += 1
+        progress = get_all_stage_progress()
+
+    work_hours = {st: {int(k): v for k, v in wk.items()} for st, wk in get_work_hours().items()}
+    overrides = {(o["the_date"], o["stage"]): o["hours"] for o in get_day_overrides()}
+    days = _business_days(body.date_from, body.date_to, stage, work_hours, overrides)
+    if not days:
+        raise HTTPException(status_code=400, detail="No open days in that range for this step.")
+
+    capacity = {day: hours_available_on(day, stage, work_hours, overrides) * 60 for day in days}
+    load = _day_load(stage)
+
+    candidates = []
+    for pro, g in grouped.items():
+        left = _available_to_schedule(pro, stage, grouped, progress)
+        if left > 0:
+            candidates.append((min(g["due_dates"]) if g.get("due_dates") else "9999-99-99", pro, left))
+    candidates.sort(key=lambda c: (c[0], c[1]))
+
+    placed, skipped = [], []
+    for due, pro, qty in candidates:
+        mins = minutes.get(pro)
+        if not mins:
+            skipped.append({"prod_order_no": pro, "why": "no minutes per unit set"})
+            continue
+        need = qty * mins
+        for day in days:
+            room = capacity[day] - load.get(day, 0.0)
+            if room + 1e-9 >= need:
+                try:
+                    create_schedule_entry_checked(pro, stage, day, qty, qty)
+                except OverBooked:
+                    break
+                load[day] = load.get(day, 0.0) + need
+                placed.append({"prod_order_no": pro, "date": day, "qty": qty,
+                               "hours": round(need / 60, 2), "due_date": due})
+                break
+        else:
+            skipped.append({"prod_order_no": pro, "why": "no day in the range with enough hours"})
+
+    write_audit(actor(request), "schedule.auto",
+                f"{body.line} {body.date_from}..{body.date_to} placed {len(placed)}, skipped {len(skipped)}"
+                + (f", replanned {replanned}" if body.replan else ""))
+    return {"placed": placed, "skipped": skipped, "replanned": replanned, "stage": stage}
+
+
+class BcDatesIn(BaseModel):
+    line: str = "doors"
+
+
+@app.post("/api/schedule/bc-dates")
+def api_place_on_bc_dates(request: Request, body: BcDatesIn):
+    """Put everything still in Holding on the date BC gives it.
+
+    Taken literally: the job lands on its own due date, not backed off by the
+    lead time. A date already past lands on today instead, since the board
+    can't schedule into the past. Hours aren't checked - this is "what BC
+    says", and the lane totals will show wherever that overloads a day.
+    """
+    stage, grouped, progress, _ = _placement_context(body.line)
+    work_hours = {st: {int(k): v for k, v in wk.items()} for st, wk in get_work_hours().items()}
+    overrides = {(o["the_date"], o["stage"]): o["hours"] for o in get_day_overrides()}
+    today = date.today()
+
+    def next_open_day(start: date) -> str | None:
+        cursor = max(start, today)
+        for _ in range(180):
+            key = cursor.isoformat()
+            if hours_available_on(key, stage, work_hours, overrides) > 0:
+                return key
+            cursor += timedelta(days=1)
+        return None
+
+    placed, skipped = [], []
+    for pro, g in sorted(grouped.items()):
+        left = _available_to_schedule(pro, stage, grouped, progress)
+        if left <= 0:
+            continue
+        if not g.get("due_dates"):
+            skipped.append({"prod_order_no": pro, "why": "no date in the export"})
+            continue
+        try:
+            due = date.fromisoformat(str(min(g["due_dates"]))[:10])
+        except ValueError:
+            skipped.append({"prod_order_no": pro, "why": "unreadable date in the export"})
+            continue
+        day = next_open_day(due)
+        if day is None:
+            skipped.append({"prod_order_no": pro, "why": "no open day near that date"})
+            continue
+        try:
+            create_schedule_entry_checked(pro, stage, day, left, left)
+        except OverBooked:
+            skipped.append({"prod_order_no": pro, "why": "already scheduled"})
+            continue
+        placed.append({"prod_order_no": pro, "date": day, "qty": left, "due_date": due.isoformat()})
+
+    write_audit(actor(request), "schedule.bc_dates", f"{body.line} placed {len(placed)}, skipped {len(skipped)}")
+    return {"placed": placed, "skipped": skipped, "stage": stage}
 
 
 # ---------- efficiency ----------
