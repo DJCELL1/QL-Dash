@@ -14,6 +14,7 @@
     adminsSet: true,   // false means nobody is an admin, so everyone counts as one
     subLaneExpanded: new Set(), // "<contractor>|<lane>" shown in full
     cavities: { rows: [], as_of: null, search: "", windowStart: null },
+    powdercoat: { rows: [], as_of: null },
     data: { joinery: null, subcontractors: null, factory: null, subBoard: null },
     history: { joinery: null, subcontractors: null },
     filters: {
@@ -24,7 +25,9 @@
         chips: new Set(),
         status: localStorage.getItem("factoryStatusFilter") || "in_production",
         viewMode: localStorage.getItem("factoryViewMode") || "day",
-        line: localStorage.getItem("factoryLine") === "cavities" ? "cavities" : "doors",
+        line: ["cavities", "powdercoat"].includes(localStorage.getItem("factoryLine"))
+          ? localStorage.getItem("factoryLine")
+          : "doors",
       },
       subboard: { search: "", chips: new Set(), viewMode: localStorage.getItem("subViewMode") || "board" },
     },
@@ -353,6 +356,7 @@
       loadSchedule(),
       loadSubBoard(),
       loadCavities(),
+      loadPowdercoat(),
       loadStatus(),
       loadWhoAmI(),
     ]);
@@ -1992,9 +1996,16 @@
   // Every door runs all five, so nothing is conditional on this line.
   const OPTIONAL_FACTORY_STAGES = [];
 
+  // Powdercoating is coated in house, so the floor ticks it off too.
+  const PC_STAGES = ["pc_prep", "pc_coat", "pc_pack"];
+
+  // A tick carries its stage, which is enough to say which line it belongs to.
+  const lineForStage = (stage) =>
+    CAV_STAGES.includes(stage) ? "cavities" : PC_STAGES.includes(stage) ? "powdercoat" : "doors";
+
   function stagesOfRow(r) {
     const list = r && r.stages && r.stages.length ? r.stages : BASE_FACTORY_STAGES;
-    return list.filter((s) => FACTORY_STAGES.includes(s) || CAV_STAGES.includes(s));
+    return list.filter((s) => FACTORY_STAGES.includes(s) || CAV_STAGES.includes(s) || PC_STAGES.includes(s));
   }
 
   // Doors and cavities are separate lines with their own stages, so the floor
@@ -2013,6 +2024,20 @@
         unit: ["unit", "units"],
         stagesText: "Prep and Make",
         exportName: "Production Scheduler export (Cavities)",
+        labels: false,
+      };
+    }
+    if (id === "powdercoat") {
+      return {
+        id,
+        data: state.powdercoat.as_of ? { as_of: state.powdercoat.as_of, rows: state.powdercoat.rows } : null,
+        rows: state.powdercoat.rows,
+        stages: PC_STAGES,
+        finalStage: PC_STAGES[PC_STAGES.length - 1],
+        progressUrl: "/api/powdercoat/progress",
+        unit: ["item", "items"],
+        stagesText: "Prep, Coat and Pack",
+        exportName: "Production Scheduler export (Powdercoating)",
         labels: false,
       };
     }
@@ -2114,7 +2139,8 @@
 
   const STAGE_LABELS = { cut_to_size: "Cut to size", machining: "Machining",
     components: "Components", build: "Build", wrap: "Wrap",
-    cav_prep: "Prep", cav_make: "Make" };
+    cav_prep: "Prep", cav_make: "Make",
+    pc_prep: "Prep", pc_coat: "Coat", pc_pack: "Pack" };
   function stageLabel(stage) {
     return STAGE_LABELS[stage] || capitalize(stage);
   }
@@ -2163,7 +2189,7 @@
     const pro = input.dataset.pro;
     const stage = input.dataset.stage;
     // The stage says which line the job is on, whichever the floor is showing.
-    const line = floorLineConfig(CAV_STAGES.includes(stage) ? "cavities" : "doors");
+    const line = floorLineConfig(lineForStage(stage));
     const row = line.rows.find((r) => r.prod_order_no === pro);
     if (!row) return;
 
@@ -2238,6 +2264,12 @@
         if (state.filters.factory.line === btn.dataset.line) return;
         state.filters.factory.line = btn.dataset.line;
         localStorage.setItem("factoryLine", btn.dataset.line);
+        // Nothing schedules powdercoating onto days, so By day would be a row
+        // of empty buckets. Land on the list that actually has the work in it.
+        if (btn.dataset.line === "powdercoat" && state.filters.factory.viewMode === "day") {
+          state.filters.factory.viewMode = "all";
+          localStorage.setItem("factoryViewMode", "all");
+        }
         // Ticks don't carry across lines: a job picked on Doors is out of sight
         // on Cavities, and Reset shouldn't clear work nobody can see selected.
         state.selectedPros.clear();
@@ -2278,17 +2310,22 @@
     const bucketsEl = $("#factory-day-buckets");
     const fs = state.filters.factory;
     const line = floorLine();
-    const cavities = line.id === "cavities";
+    const isDoors = line.id === "doors";
     const allRows = line.rows || [];
     const rowByPro = new Map(allRows.map((r) => [r.prod_order_no, r]));
     const searchable = new Set(filterFactoryRows(allRows, fs.search).map((r) => r.prod_order_no));
 
     // Read the same cards the board for this line draws. Reading the bookings
     // table instead left this view blank wherever the work wasn't dragged onto
-    // a day — which is most CNC, since CNC follows a dated Make rather than
-    // being booked in its own right.
-    const cardsByCell = cavities
-      ? buildCavityCells(allRows)
+    // a day — which is most of the later stages, since they follow a dated Cut
+    // to size rather than being booked in their own right.
+    //
+    // Powdercoating has no scheduling board of its own, so there are no cards
+    // to place: its day view stays empty and All jobs is the useful one, which
+    // is where the line toggle sends you.
+    const cardsByCell =
+      line.id === "cavities" ? buildCavityCells(allRows)
+      : line.id === "powdercoat" ? new Map()
       : buildScheduleCells(allRows, computeMakeAnchors());
 
     function cardsForDay(stage) {
@@ -2307,7 +2344,7 @@
       return out;
     }
 
-    bucketsEl.innerHTML = (cavities ? CAV_STAGES : factoryDayStages()).map((stage) => {
+    bucketsEl.innerHTML = (isDoors ? factoryDayStages() : line.stages).map((stage) => {
       const perPro = new Map();
       for (const c of cardsForDay(stage)) {
         if (!searchable.has(c.pro)) continue;
@@ -2330,7 +2367,7 @@
       // Cavities have no running order of their own yet, so theirs is by date.
       const section = (scheduleSections().find((s) => s.stages.includes(stage)) || {}).id;
       for (const b of bucketRows) {
-        b.rank = cavities ? 0 : priorityOf(dayK, section, soLabel(b.r.sales_order_no));
+        b.rank = isDoors ? priorityOf(dayK, section, soLabel(b.r.sales_order_no)) : 0;
       }
       bucketRows.sort(
         (a, b) =>
@@ -2449,7 +2486,7 @@
     const thead = tableEl.querySelector("thead");
     const tbody = tableEl.querySelector("tbody");
     const allPicked = rows.length > 0 && rows.every((r) => state.selectedPros.has(r.prod_order_no));
-    const stageCols = line.id === "cavities" ? CAV_STAGES : visibleStageColumns(rows);
+    const stageCols = line.id === "doors" ? visibleStageColumns(rows) : line.stages;
     thead.innerHTML =
       `<tr><th class="col-pick"><input type="checkbox" class="factory-pick-all" ${allPicked ? "checked" : ""} title="Select all shown"></th>` +
       "<th>Order</th><th>Customer</th><th>Item</th><th>Due</th><th>Total</th>" +
@@ -2548,7 +2585,7 @@
       try {
         const res = await postJSON("/api/factory/reset", { prod_order_nos: pros });
         state.selectedPros.clear();
-        await Promise.all([refreshScheduleAndFactory(), loadCavities()]);
+        await Promise.all([refreshScheduleAndFactory(), loadCavities(), loadPowdercoat()]);
         renderFactory();
         alert(
           `Reset done — progress cleared on ${res.cleared} job${res.cleared === 1 ? "" : "s"}, ` +
@@ -4875,6 +4912,18 @@
   const CAV_STAGES = ["cav_prep", "cav_make"];
   const CAV_LABELS = { cav_prep: "Prep", cav_make: "Make" };
   const CAV_WINDOW_DAYS = 12;
+
+  async function loadPowdercoat() {
+    try {
+      const d = await fetchJSON("/api/powdercoat");
+      state.powdercoat.rows = d.rows || [];
+      state.powdercoat.as_of = d.as_of;
+    } catch (e) {
+      // 404 until the first powdercoating export is uploaded — not an error state
+      state.powdercoat.rows = [];
+      state.powdercoat.as_of = null;
+    }
+  }
 
   async function loadCavities() {
     try {

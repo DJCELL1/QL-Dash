@@ -107,7 +107,28 @@ The WA line's stages (`make`, `press`, `cnc`, `glazing`, `edge_strip`,
 picked two optional stages per job from markers in the item description; that
 branch is gone, and `_stages_for()` now returns the same five every time.
 
-Cavities are a separate two-step line (`cav_prep`, `cav_make`), unaffected.
+## The three floor lines
+
+The Factory floor tab toggles between three lines, each with its own stages,
+its own endpoint pair and its own columns in `stage_progress`:
+
+| Line | Stages | Reads | Progress endpoint |
+|---|---|---|---|
+| Doors | the five above | `joinery` | `/api/factory/progress` |
+| Cavities | `cav_prep`, `cav_make` | `cavities` | `/api/cavities/progress` |
+| Powdercoating | `pc_prep`, `pc_coat`, `pc_pack` | `subcontractors` | `/api/powdercoat/progress` |
+
+`floorLineConfig()` in `frontend/app.js` is where a line is described, and
+`lineForStage()` maps a tick back to its line. All three enforce the same
+ordering rule: a step can't run ahead of the one before it or drop below the
+one after it.
+
+Only doors have a scheduling board, so the floor's "By day" view is empty for
+powdercoating - picking that line switches to "All jobs" for that reason.
+
+Note that powdercoat jobs are measured in both EA and LTHS. Per-row totals are
+right, but the floor's aggregate "items" tile sums the two together, which the
+subcontractor board deliberately avoids (see `fmtQtyTotals`).
 
 ## Auth
 

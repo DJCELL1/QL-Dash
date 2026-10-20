@@ -1057,6 +1057,101 @@ def api_cavities_progress(request: Request, update: CavityUpdate):
     return row
 
 
+# Powdercoating is coated here rather than sent out, so the floor ticks it off
+# the same way as the doors and the cavities. It reads the subcontractors
+# dataset, which is where the PC-Q export lands.
+PC_STAGES = ("pc_prep", "pc_coat", "pc_pack")
+PC_STAGE_LABELS = {"pc_prep": "Prep", "pc_coat": "Coat", "pc_pack": "Pack"}
+PC_DATASET = "subcontractors"
+
+
+def _pc_row(pro: str, g: dict, progress: dict) -> dict | None:
+    total = g["total_qty"]
+    if total <= 0:
+        return None
+    p = progress.get(pro, {})
+    done = {st: min(p.get(f"{st}_done", 0) or 0, total) for st in PC_STAGES}
+    pct = sum(done[st] / total for st in PC_STAGES) / len(PC_STAGES) * 100
+    posted = bool(g.get("posted"))
+    finished = posted or done[PC_STAGES[-1]] >= total
+
+    row = {
+        "prod_order_no": pro,
+        "sales_order_no": g["sales_order_no"],
+        "source_name": g["source_name"],
+        "item_summary": g["items"][0] if len(g["items"]) == 1 else f"{len(g['items'])} items",
+        "posted": posted,
+        "wm_number": _warehouse_movement(g),
+        "due_date": min(g["due_dates"]) if g["due_dates"] else None,
+        "total_qty": total,
+        "stages": list(PC_STAGES),
+        "pct_complete": round(pct, 1),
+        "status": "completed" if finished else "in_production",
+        "completed_at": p.get("updated_at") if finished else None,
+    }
+    for st in PC_STAGES:
+        row[f"{st}_done"] = done[st]
+    return row
+
+
+@app.get("/api/powdercoat")
+def api_powdercoat():
+    as_of, grouped = _pro_totals(PC_DATASET)
+    if as_of is None:
+        raise HTTPException(status_code=404, detail="No powdercoating data ingested yet")
+
+    progress = get_all_stage_progress()
+    rows = [row for pro, g in grouped.items() if (row := _pc_row(pro, g, progress)) is not None]
+    rows.sort(key=lambda r: r["due_date"] or "9999-99-99")
+    return {"as_of": as_of, "rows": rows}
+
+
+class PowdercoatUpdate(BaseModel):
+    prod_order_no: str
+    stage: str
+    done: float = Field(ge=0)
+
+
+@app.post("/api/powdercoat/progress")
+def api_powdercoat_progress(request: Request, update: PowdercoatUpdate):
+    if update.stage not in PC_STAGES:
+        raise HTTPException(status_code=400, detail=f"stage must be one of {', '.join(PC_STAGES)}")
+
+    _, grouped = _pro_totals(PC_DATASET)
+    g = grouped.get(update.prod_order_no)
+    if g is None:
+        raise HTTPException(status_code=404, detail=f"{update.prod_order_no} isn't in the powdercoating export.")
+    total = g["total_qty"]
+    done = min(update.done, total) if total else update.done
+
+    # Same ordering rule as the other two lines: a step can't run ahead of the
+    # one before it, or drop below the one after it.
+    existing = dict(get_stage_progress(update.prod_order_no) or {})
+    idx = PC_STAGES.index(update.stage)
+    if idx > 0:
+        prev = PC_STAGES[idx - 1]
+        prev_done = existing.get(f"{prev}_done", 0) or 0
+        if done > prev_done:
+            raise HTTPException(
+                status_code=400,
+                detail=f"{PC_STAGE_LABELS[update.stage]} can't be ahead of {PC_STAGE_LABELS[prev]} — only {_fmt_qty(prev_done)} done there so far.",
+            )
+    if idx < len(PC_STAGES) - 1:
+        nxt = PC_STAGES[idx + 1]
+        next_done = existing.get(f"{nxt}_done", 0) or 0
+        if done < next_done:
+            raise HTTPException(
+                status_code=400,
+                detail=f"{PC_STAGE_LABELS[update.stage]} can't drop below {PC_STAGE_LABELS[nxt]} — {_fmt_qty(next_done)} already done there.",
+            )
+
+    row = set_stage_progress(update.prod_order_no, update.stage, done)
+    write_audit(actor(request), "powdercoat.progress",
+                f"{update.prod_order_no} {update.stage} -> {_fmt_qty(done)} of {_fmt_qty(total)}")
+    row["total_qty"] = total
+    return row
+
+
 class ProgressUpdate(BaseModel):
     prod_order_no: str
     stage: str
@@ -1148,7 +1243,7 @@ def _grouped_for_stage(stage: str) -> dict:
 
 
 def _stage_label(stage: str) -> str:
-    return CAVITY_STAGE_LABELS.get(stage) or STAGE_LABELS.get(stage, stage)
+    return CAVITY_STAGE_LABELS.get(stage) or PC_STAGE_LABELS.get(stage) or STAGE_LABELS.get(stage, stage)
 
 
 def _available_to_schedule(pro: str, stage: str, grouped: dict, progress: dict, exclude_entry_id: int | None = None) -> float:

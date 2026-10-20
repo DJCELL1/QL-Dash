@@ -110,6 +110,9 @@ CREATE TABLE IF NOT EXISTS stage_progress (
     finish_done REAL NOT NULL DEFAULT 0,
     cav_prep_done REAL NOT NULL DEFAULT 0,
     cav_make_done REAL NOT NULL DEFAULT 0,
+    pc_prep_done REAL NOT NULL DEFAULT 0,
+    pc_coat_done REAL NOT NULL DEFAULT 0,
+    pc_pack_done REAL NOT NULL DEFAULT 0,
     updated_at TEXT NOT NULL
 );
 
@@ -254,6 +257,10 @@ STAGE_COLUMNS = {
     # Cavities are a separate in-house line with two steps of their own.
     "cav_prep": "cav_prep_done",
     "cav_make": "cav_make_done",
+    # Powdercoating is a third in-house line, three steps.
+    "pc_prep": "pc_prep_done",
+    "pc_coat": "pc_coat_done",
+    "pc_pack": "pc_pack_done",
 }
 
 
@@ -281,7 +288,8 @@ def _add_missing_columns(conn) -> None:
     added = []
     for column in ("glazing_done", "edge_strip_done", "cav_prep_done", "cav_make_done",
                    "cut_to_size_done", "machining_done", "components_done",
-                   "build_done", "wrap_done"):
+                   "build_done", "wrap_done",
+                   "pc_prep_done", "pc_coat_done", "pc_pack_done"):
         if column not in have:
             conn.execute(f"ALTER TABLE stage_progress ADD COLUMN {column} REAL NOT NULL DEFAULT 0")
             added.append(column)
