@@ -1908,6 +1908,11 @@ PLANNING_DEFAULTS = {
     "capacity_stage": "",             # blank = the first step on the line
     "daily_rates": {"doors": 20, "cavities": 8, "powdercoat": 40},
     "stage_offsets": {"machining": 0, "components": 1, "build": 1, "wrap": 1},
+    # Label stock. The short roll is what's loaded today; the taller one has
+    # the room for a barcode.
+    "label_door_w": 102,
+    "label_door_h": 36,
+    "label_barcode": False,
 }
 
 

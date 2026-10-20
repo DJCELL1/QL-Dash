@@ -276,6 +276,24 @@ The WM flag on a sales order is drawn even when there is no number, dimmed, so
 the first one can be typed in. Without that there is no way to add one to an
 order BC has no comment on.
 
+## Labels and barcodes
+
+`barcodeSvg()` draws a Code 128B symbol as inline SVG - no library, because the
+frontend has no build step. `CODE128_PATTERNS` is the standard 107-entry table
+(entry 106, the stop, is seven modules wide; the rest are six). The door label
+encodes the PRO, the pallet label the sales order, both with a 10-module quiet
+zone each side. A character outside printable ASCII returns null rather than
+drawing a symbol that cannot be read.
+
+Label stock is a setting, not a constant, because the door label was tuned
+tightly for the short roll: `label_door_w` / `label_door_h` / `label_barcode` in
+planning, switched by the Door roll selector on the Labels tab. 102 x 36 has no
+room for bars and leaves the barcode off; 100 x 50 turns it on. The pallet label
+is 100 x 150 either way.
+
+Bars print `shape-rendering: crispEdges` and pure black. A thermal head fakes
+grey by dropping dots, which is exactly what stops a scanner reading them.
+
 ## Auth
 
 Signed cookie `prodash_session`, 30 days. Reading is open to anyone with the

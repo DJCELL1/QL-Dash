@@ -4093,6 +4093,36 @@
     return { hours, unpriced };
   }
 
+  // Which roll is loaded. The short one is what the shop runs today; the taller
+  // one has the room a scannable barcode needs, so the two go together.
+  const LABEL_ROLLS = {
+    "102x36": { label_door_w: 102, label_door_h: 36, label_barcode: false },
+    "100x50": { label_door_w: 100, label_door_h: 50, label_barcode: true },
+  };
+
+  function currentRoll() {
+    const s = labelStock("door");
+    return s.w === 100 && s.h === 50 ? "100x50" : "102x36";
+  }
+
+  function wireLabelStock() {
+    const sel = $("#label-stock");
+    if (!sel) return;
+    sel.value = currentRoll();
+    sel.onchange = async () => {
+      const values = LABEL_ROLLS[sel.value];
+      if (!values) return;
+      try {
+        await postJSON("/api/settings/planning", { values });
+        await loadSettings();
+        renderLabels();
+      } catch (e) {
+        notifyError(e, "Couldn't change the label stock.");
+        sel.value = currentRoll();
+      }
+    };
+  }
+
   // ---------- wm numbers in bulk ----------
 
   function summariseWm(res) {
@@ -5122,10 +5152,69 @@
   // Width across the web, then length along the feed, in mm. The page size,
   // the artwork and the preview frame all read from here, so a change of roll
   // is this line and a look at the layout, not a hunt for hardcoded sizes.
-  const LABEL_STOCK = {
-    door: { w: 102, h: 36 },
-    pallet: { w: 100, h: 150 },
-  };
+  // Code 128 bar/space widths, value 0..106. Entry 106 is the stop pattern and
+  // is seven modules wide; every other is six.
+  const CODE128_PATTERNS = (
+    "212222 222122 222221 121223 121322 131222 122213 122312 132212 221213 " +
+    "221312 231212 112232 122132 122231 113222 123122 123221 223211 221132 " +
+    "221231 213212 223112 312131 311222 321122 321221 312212 322112 322211 " +
+    "212123 212321 232121 111323 131123 131321 112313 132113 132311 211313 " +
+    "231113 231311 112133 112331 132131 113123 113321 133121 313121 211331 " +
+    "231131 213113 213311 213131 311123 311321 331121 312113 312311 332111 " +
+    "314111 221411 431111 111224 111422 121124 121421 141122 141221 112214 " +
+    "112412 122114 122411 142112 142211 241211 221114 413111 241112 134111 " +
+    "111242 121142 121241 114212 124112 124211 411212 421112 421211 212141 " +
+    "214121 412121 111143 111341 131141 114113 114311 411113 411311 113141 " +
+    "114131 311141 411131 211412 211214 211232 2331112"
+  ).split(/\s+/);
+
+  // Code 128B: every printable ASCII, value = code - 32. Enough for a PRO
+  // number, and it avoids the mode switching the other sets need.
+  function code128bValues(text) {
+    const values = [104];                               // Start B
+    for (const ch of String(text)) {
+      const code = ch.charCodeAt(0);
+      if (code < 32 || code > 126) return null;         // can't encode it
+      values.push(code - 32);
+    }
+    let sum = values[0];
+    for (let i = 1; i < values.length; i++) sum += i * values[i];
+    values.push(sum % 103);                             // check digit
+    values.push(106);                                   // Stop
+    return values;
+  }
+
+  // An SVG of the symbol, sized in modules so the label can scale it with CSS.
+  // The 10-module quiet zone each side is what a scanner needs to find it.
+  function barcodeSvg(text) {
+    const values = code128bValues(text);
+    if (!values) return "";
+    const QUIET = 10;
+    let x = QUIET;
+    let bars = "";
+    for (const value of values) {
+      let isBar = true;
+      for (const width of CODE128_PATTERNS[value]) {
+        const w = Number(width);
+        if (isBar) bars += `<rect x="${x}" y="0" width="${w}" height="100" />`;
+        x += w;
+        isBar = !isBar;
+      }
+    }
+    const total = x + QUIET;
+    return `<svg class="barcode" viewBox="0 0 ${total} 100" preserveAspectRatio="none"
+      role="img" aria-label="${labelEsc(text)}"><rect x="0" y="0" width="${total}" height="100" fill="#fff"/>${bars}</svg>`;
+  }
+
+  function labelStock(kind) {
+    const p = planning();
+    if (kind === "door") {
+      return { w: Number(p.label_door_w) || 102, h: Number(p.label_door_h) || 36 };
+    }
+    return { w: 100, h: 150 };
+  }
+
+  const labelBarcodeOn = () => !!planning().label_barcode;
 
   // Absolute, because the print and preview iframes are written rather than
   // navigated and a relative path has nothing dependable to resolve against.
@@ -5136,13 +5225,13 @@
   const LABEL_RUN_WARN = 25;
 
   function labelPageCSS(kind) {
-    const s = LABEL_STOCK[kind];
+    const s = labelStock(kind);
     return `@page { size: ${s.w}mm ${s.h}mm; margin: 0; }`;
   }
 
-  const stockText = (kind) => `${LABEL_STOCK[kind].w} × ${LABEL_STOCK[kind].h}mm`;
+  const stockText = (kind) => `${labelStock(kind).w} × ${labelStock(kind).h}mm`;
 
-  const LABEL_CSS = `
+  const labelCss = () => `
     html, body { margin: 0; padding: 0; background: #fff; overflow: hidden; }
     body { font-family: Arial, Helvetica, sans-serif; color: #000; }
     .label { background: #fff; box-sizing: border-box; display: flex; flex-direction: column;
@@ -5155,8 +5244,12 @@
     .label > * { flex-shrink: 0; }
     /* Everything prints pure black. A thermal head has no grey: it fakes one
        by leaving dots out, which is what made the description print faint. */
-    .door   { width: ${LABEL_STOCK.door.w}mm; height: ${LABEL_STOCK.door.h}mm; padding: 2mm 3mm; }
-    .pallet { width: ${LABEL_STOCK.pallet.w}mm; height: ${LABEL_STOCK.pallet.h}mm; padding: 6mm; }
+    .door   { width: ${labelStock('door').w}mm; height: ${labelStock('door').h}mm; padding: 2mm 3mm; }
+    .pallet { width: ${labelStock('pallet').w}mm; height: ${labelStock('pallet').h}mm; padding: 6mm; }
+    /* Pure black, no anti-aliasing: a thermal head fakes grey by dropping
+       dots, which is exactly what stops a scanner reading the bars. */
+    .barcode { width: 100%; height: 9mm; display: block; margin-top: .8mm; shape-rendering: crispEdges; fill: #000; }
+    .pallet .barcode { height: 16mm; margin-top: 3mm; }
     .cust { font-weight: 700; line-height: 1.05; overflow: hidden; }
     .cust.is-stock { letter-spacing: .06em; }
     /* Door stock is wide and short, so height is what runs out. The customer
@@ -5232,6 +5325,7 @@
         <div class="dno"><span>DOOR No.</span><b>${labelEsc(doorMarkFor(r, n))}</b></div>
       </div>
       <div class="spec">${labelEsc(r.item_summary || "")}</div>
+      ${labelBarcodeOn() ? barcodeSvg(r.prod_order_no) : ""}
     </div>`;
   }
 
@@ -5243,6 +5337,7 @@
       ${order.job_name ? `<div class="job">${labelEsc(order.job_name)}</div>` : ""}
       <div class="big">${labelEsc(order.so)}</div>
       <div class="foot"><div class="qty">${fmtNum(order.doors)} door${order.doors === 1 ? "" : "s"}</div></div>
+      ${labelBarcodeOn() ? barcodeSvg(order.so) : ""}
     </div>`;
   }
 
@@ -5301,7 +5396,7 @@
     frame.style.cssText = "position:fixed;right:0;bottom:0;width:1px;height:1px;opacity:0;border:0";
     document.body.appendChild(frame);
 
-    writeLabelDoc(frame.contentDocument, labelPageCSS(kind) + LABEL_CSS, html)
+    writeLabelDoc(frame.contentDocument, labelPageCSS(kind) + labelCss(), html)
       .then(() => {
         frame.contentWindow.focus();
         frame.contentWindow.print();
@@ -5806,7 +5901,7 @@
   const MM_PX = 96 / 25.4;
 
   function labelPreviewFrame(container, kind, html) {
-    const { w, h } = LABEL_STOCK[kind];
+    const { w, h } = labelStock(kind);
     const frame = document.createElement("iframe");
     frame.className = "label-frame";
     frame.title = kind === "pallet" ? "Pallet label preview" : "Door label preview";
@@ -5817,7 +5912,7 @@
     container.appendChild(frame);
     // Previewing through the same writer the printer uses means what's on
     // screen is the artwork, not a second drawing of it that can drift.
-    writeLabelDoc(frame.contentDocument, LABEL_CSS, html).catch((e) => console.error(e));
+    writeLabelDoc(frame.contentDocument, labelCss(), html).catch((e) => console.error(e));
   }
 
   function renderLabels() {
@@ -6756,6 +6851,7 @@
   wireGantt();
   wireAutoSchedule();
   wireWmBulk();
+  wireLabelStock();
   wireUnitTracker();
   wireCavities();
   wireFactoryDayNav();
