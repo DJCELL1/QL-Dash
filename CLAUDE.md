@@ -154,6 +154,30 @@ stored row, so don't, without a migration.
 
 Seeding only runs while a table is empty, so an edit is never overwritten.
 
+## Hours on the boards
+
+Each lane shows estimated hours against hours available when
+`planning.capacity_measure` is `hours` (the default); set it to `count` for the
+old doors-per-day check.
+
+Estimated hours come from `minutes` on each job row, which the API resolves
+with `minutes_lookup()`: product row -> `__default__` row -> BC's estimate. A
+job with no figure anywhere isn't counted and the lane shows `+N?` instead of
+quietly under-reading.
+
+Hours available come from Settings, resolved in `stageHoursOn()`: an override
+for that date and step beats one for the whole day, which beats the weekly
+pattern. A day with no hours at any step draws as closed, with the override's
+note as its tooltip. Weekends never appear - the board is built on business
+days.
+
+Cards colour by state, in this order: step complete, then material shortage,
+then past due. Shortage rides on the PRO, since one short item holds the whole
+job up.
+
+BC sends dates as `2026-10-16 00:00:00`. `parseDateKey()` cannot read that and
+returns an Invalid Date, so compare ISO prefixes with `.slice(0, 10)` instead.
+
 ## Auth
 
 Signed cookie `prodash_session`, 30 days. Reading is open to anyone with the

@@ -2854,7 +2854,16 @@
     const p = stageProgress(card.pro, card.stage);
     const done = p.pct >= 1 && p.total > 0;
     const picked = state.selectedCards.has(cardKey);
-    const cls = `schedule-card ${card.confirmed ? "" : "is-suggested"} ${done ? "is-stage-done" : ""} ${picked ? "is-selected" : ""}`;
+    // A finished step wins over everything else — it's done, whatever else is
+    // true of it. Shortage then beats overdue: material is the thing stopping
+    // it, and the date can't be fixed until the material is.
+    const row = state.factoryByPro.get(card.pro);
+    // BC sends dates as "2026-10-16 00:00:00", which parseDateKey can't read,
+    // so compare the ISO prefixes instead — they sort correctly as text.
+    const overdue = !done && card.due && String(card.due).slice(0, 10) < dateKey(new Date());
+    const shortage = !done && row && row.shortage;
+    const stateCls = done ? "is-stage-done" : shortage ? "is-card-shortage" : overdue ? "is-card-overdue" : "";
+    const cls = `schedule-card ${card.confirmed ? "" : "is-suggested"} ${stateCls} ${picked ? "is-selected" : ""}`;
     const dueText = card.due ? fmtDate(card.due) : "";
     // Join only shows on a job that's in more than one piece — on an unsplit
     // card it would do nothing, and three buttons on a card this size is a lot.
@@ -3892,6 +3901,15 @@
 
     const threshold = state.capacity.doorsPerDay;
 
+    const keyEl = $("#schedule-key");
+    if (keyEl) {
+      keyEl.innerHTML =
+        '<span class="key-swatch key-done">Step complete</span>' +
+        '<span class="key-swatch key-overdue">Past due date</span>' +
+        '<span class="key-swatch key-shortage">Material shortage</span>' +
+        '<span class="key-swatch key-closed">Closed day</span>';
+    }
+
     boardEl.innerHTML = days
       .map((day) => {
         const dKey = dateKey(day);
@@ -3905,7 +3923,18 @@
 
           let comboCls = "";
           let labelText = section.label;
-          if (section.capacityCheck) {
+          if (planning().capacity_measure === "hours") {
+            // Every lane is measured, not just the one the board plans against:
+            // a step with more work than hours is a step that won't get done.
+            const { hours, unpriced } = estimatedHours(cards);
+            const avail = hoursAvailable(dKey, section.stages);
+            labelText = `${section.label} — ${hours.toFixed(1)}/${fmtNum(avail)}h`;
+            if (unpriced) labelText += `<span class="lane-unpriced" title="${unpriced} job(s) have no minutes-per-unit set, so they aren't counted">+${unpriced}?</span>`;
+            // Work on a day with no hours is over capacity by definition — a
+            // shutdown with jobs still sitting on it is the loudest case there is.
+            if (hours > avail) comboCls = "is-over-capacity";
+            else if (avail > 0 && hours >= avail * 0.95) comboCls = "is-at-capacity";
+          } else if (section.capacityCheck) {
             const total = dedupedDoorTotal(cards);
             labelText = `${section.label} — ${fmtNum(total)}/${fmtNum(threshold)}`;
             if (total > threshold) comboCls = "is-over-capacity";
@@ -3927,7 +3956,10 @@
           : `<button class="lock-btn" type="button" data-lock-date="${dKey}" title="Lock this day in — from then on the board is measured against it">🔓</button>`;
 
         const dayPicked = state.selectedDays.has(dKey);
-        return `<div class="schedule-day ${isToday ? "is-today" : ""} ${dayPicked ? "is-day-selected" : ""} ${plan ? "is-locked-day" : ""}">
+        // A day with no hours anywhere is shut: weekend, holiday or shutdown.
+        const closed = hoursAvailable(dKey, sections.flatMap((s) => s.stages)) === 0;
+        const note = dayNote(dKey);
+        return `<div class="schedule-day ${isToday ? "is-today" : ""} ${dayPicked ? "is-day-selected" : ""} ${plan ? "is-locked-day" : ""} ${closed ? "is-closed-day" : ""}"${closed && note ? ` title="${escapeAttr(note)}"` : ""}>
           <div class="schedule-day-head">
             <input type="checkbox" class="schedule-day-pick" data-date="${dKey}" ${dayPicked ? "checked" : ""} title="Select this day to reset">
             <span class="day-label">${fmtDayDate(day)}</span>
@@ -3956,6 +3988,60 @@
     wireDayPickers();
     renderScheduleSelection();
     renderResetBar();
+  }
+
+  // ---------- hours against hours available ----------
+
+  const PLANNING_FALLBACK = { capacity_measure: "hours", shift_start: "07:00" };
+
+  function planning() {
+    return (state.settings && state.settings.planning) || PLANNING_FALLBACK;
+  }
+
+  // What a day gives a step. A date set in Settings wins over the weekly
+  // pattern, and a date set for every step wins over nothing at all.
+  function stageHoursOn(dKey, stage) {
+    const s = state.settings;
+    if (!s) return 0;
+    const overrides = s.day_overrides || [];
+    const exact = overrides.find((o) => o.the_date === dKey && o.stage === stage);
+    if (exact) return exact.hours;
+    const allSteps = overrides.find((o) => o.the_date === dKey && !o.stage);
+    if (allSteps) return allSteps.hours;
+    const week = (s.work_hours || {})[stage] || {};
+    const wd = (parseDateKey(dKey).getDay() + 6) % 7;   // JS Sunday=0 -> Monday=0
+    return Number(week[wd] ?? week[String(wd)] ?? 0);
+  }
+
+  function hoursAvailable(dKey, stages) {
+    return stages.reduce((sum, st) => sum + stageHoursOn(dKey, st), 0);
+  }
+
+  // The reason a day is closed, for the tooltip, when one was given.
+  function dayNote(dKey) {
+    const o = ((state.settings && state.settings.day_overrides) || [])
+      .find((x) => x.the_date === dKey && !x.stage);
+    return o && o.note ? o.note : "";
+  }
+
+  function minutesPerUnit(pro, stage) {
+    const row = state.factoryByPro.get(pro);
+    const mins = row && row.minutes ? row.minutes[stage] : null;
+    return typeof mins === "number" ? mins : null;
+  }
+
+  // Estimated hours for a lane's cards. A job with no figure anywhere — no
+  // product row, no default and no BC estimate — contributes nothing and is
+  // counted so the lane can say the total is short.
+  function estimatedHours(cards) {
+    let hours = 0;
+    let unpriced = 0;
+    for (const c of cards) {
+      const mins = minutesPerUnit(c.pro, c.stage);
+      if (mins == null) { unpriced += 1; continue; }
+      hours += (c.qty || 0) * mins / 60;
+    }
+    return { hours, unpriced };
   }
 
   // ---------- settings ----------

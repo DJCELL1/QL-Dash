@@ -16,6 +16,12 @@
 
   /* French Grey on Pure White is a sanctioned pairing (pg 06); pinned here so
      filled controls keep legible contrast in both themes. */
+  --card-done-bg:      #e8f2e8;
+  --card-done-line:    #5a9c5a;
+  --card-overdue-bg:   #fbe9e7;
+  --card-overdue-line: #c9524a;
+  --card-shortage-bg:  #f2e4e8;
+  --card-shortage-line:#8c3350;
   --accent-solid:   #637a90;
   --accent-on:      #f7f7fb;
 
@@ -38,6 +44,12 @@
     --gridline:       #4a4a4a;
     --baseline:       #606161;              /* Grey */
     --border:         rgba(247,247,251,0.12);
+    --card-done-bg:      #1d2a1d;
+    --card-done-line:    #4c8f4c;
+    --card-overdue-bg:   #2e1a18;
+    --card-overdue-line: #c4645c;
+    --card-shortage-bg:  #2b1a21;
+    --card-shortage-line:#a8566e;
     --series-1:       #8ea1b4;              /* French Grey, lifted to read on Charcoal */
     --series-2:       #b7c2cb;              /* Platinum */
 
@@ -59,6 +71,12 @@
   --gridline:       #4a4a4a;
   --baseline:       #606161;              /* Grey */
   --border:         rgba(247,247,251,0.12);
+  --card-done-bg:      #1d2a1d;
+  --card-done-line:    #4c8f4c;
+  --card-overdue-bg:   #2e1a18;
+  --card-overdue-line: #c4645c;
+  --card-shortage-bg:  #2b1a21;
+  --card-shortage-line:#a8566e;
   --series-1:       #8ea1b4;              /* French Grey, lifted to read on Charcoal */
   --series-2:       #b7c2cb;              /* Platinum */
   --status-good:     #0ca30c;
@@ -2005,3 +2023,51 @@ button.who:hover { background: var(--baseline); color: var(--text-primary); }
 
 .footer-detail { display: flex; flex-wrap: wrap; gap: 4px 18px; margin-left: auto; }
 .footer-detail a { color: inherit; }
+
+/* ---------- board: hours, closed days and the colour key ---------- */
+
+.schedule-key { display: flex; flex-wrap: wrap; gap: 8px 14px; margin-bottom: 10px; }
+
+.key-swatch {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+.key-swatch::before {
+  content: "";
+  width: 13px;
+  height: 13px;
+  border-radius: 3px;
+  border: 1px solid var(--baseline);
+  background: var(--surface-1);
+}
+.key-done::before     { background: var(--card-done-bg);     border-color: var(--card-done-line); }
+.key-overdue::before  { background: var(--card-overdue-bg);  border-color: var(--card-overdue-line); }
+.key-shortage::before { background: var(--card-shortage-bg); border-color: var(--card-shortage-line); }
+.key-closed::before   { background: var(--gridline);         border-color: var(--baseline); }
+
+/* Jobs with no minutes-per-unit anywhere aren't in the lane total, so the lane
+   says how many it left out rather than quietly under-reading. */
+.lane-unpriced {
+  margin-left: 5px;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--status-warning);
+}
+
+/* Weekend, public holiday or shutdown — no hours at any step. */
+.schedule-day.is-closed-day { background: var(--gridline); }
+.schedule-day.is-closed-day .schedule-dropzone { opacity: 0.55; }
+
+/* Soft fill, stronger border. The key above the board names each one. */
+.schedule-card.is-card-overdue {
+  background: var(--card-overdue-bg);
+  border-color: var(--card-overdue-line);
+}
+.schedule-card.is-card-shortage {
+  background: var(--card-shortage-bg);
+  border-color: var(--card-shortage-line);
+}

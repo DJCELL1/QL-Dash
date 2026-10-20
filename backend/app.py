@@ -731,8 +731,13 @@ def _group_records(records: list[dict]) -> dict[str, dict]:
             "comments": [],
             "operations": operations.get(pro, set()),
             "total_qty": 0.0,
+            "shortage": False,
         })
         g["total_qty"] += r.get("quantity") or 0
+        # One short item is enough to hold the whole job up, so the flag is
+        # carried on the PRO rather than left on the line it came from.
+        if r.get("shortage"):
+            g["shortage"] = True
         if r.get("item_description"):
             g["items"].append(r["item_description"])
         if r.get("item_no"):
@@ -853,6 +858,7 @@ def _factory_row(pro: str, g: dict, progress: dict, door_numbers: dict | None = 
         # What the customer calls the job, from the sales order.
         "job_name": (job_names or {}).get(g["sales_order_no"] or "") or None,
         "due_date": min(g["due_dates"]) if g["due_dates"] else None,
+        "shortage": bool(g.get("shortage")),
         "total_qty": total,
         "stages": list(stages),
         "pct_complete": round(pct, 1),
@@ -875,10 +881,13 @@ def api_factory():
     progress = get_all_stage_progress()
     door_numbers = get_all_door_numbers()
     job_names = get_all_sales_orders()
-    rows = [
-        row for pro, g in grouped.items()
-        if (row := _factory_row(pro, g, progress, door_numbers, job_names)) is not None
-    ]
+    lookup = minutes_lookup()
+    rows = []
+    for pro, g in grouped.items():
+        row = _factory_row(pro, g, progress, door_numbers, job_names)
+        if row is not None:
+            row["minutes"] = _minutes_for(g, STAGES, lookup)
+            rows.append(row)
     rows.sort(key=lambda r: r["due_date"] or "9999-99-99")
 
     return {"as_of": as_of, "rows": rows}
@@ -999,6 +1008,7 @@ def _cavity_row(pro: str, g: dict, progress: dict) -> dict | None:
         "wm_number": _warehouse_movement(g),
         "due_date": min(g["due_dates"]) if g["due_dates"] else None,
         "total_qty": total,
+        "shortage": bool(g.get("shortage")),
         "stages": list(CAVITY_STAGES),
         "pct_complete": round(pct, 1),
         "status": "completed" if finished else "in_production",
@@ -1016,7 +1026,13 @@ def api_cavities():
         raise HTTPException(status_code=404, detail="No cavities data ingested yet")
 
     progress = get_all_stage_progress()
-    rows = [row for pro, g in grouped.items() if (row := _cavity_row(pro, g, progress)) is not None]
+    lookup = minutes_lookup()
+    rows = []
+    for pro, g in grouped.items():
+        row = _cavity_row(pro, g, progress)
+        if row is not None:
+            row["minutes"] = _minutes_for(g, CAVITY_STAGES, lookup)
+            rows.append(row)
     rows.sort(key=lambda r: r["due_date"] or "9999-99-99")
     return {"as_of": as_of, "rows": rows}
 
@@ -1094,6 +1110,7 @@ def _pc_row(pro: str, g: dict, progress: dict) -> dict | None:
         "wm_number": _warehouse_movement(g),
         "due_date": min(g["due_dates"]) if g["due_dates"] else None,
         "total_qty": total,
+        "shortage": bool(g.get("shortage")),
         "stages": list(PC_STAGES),
         "pct_complete": round(pct, 1),
         "status": "completed" if finished else "in_production",
@@ -1111,7 +1128,13 @@ def api_powdercoat():
         raise HTTPException(status_code=404, detail="No powdercoating data ingested yet")
 
     progress = get_all_stage_progress()
-    rows = [row for pro, g in grouped.items() if (row := _pc_row(pro, g, progress)) is not None]
+    lookup = minutes_lookup()
+    rows = []
+    for pro, g in grouped.items():
+        row = _pc_row(pro, g, progress)
+        if row is not None:
+            row["minutes"] = _minutes_for(g, PC_STAGES, lookup)
+            rows.append(row)
     rows.sort(key=lambda r: r["due_date"] or "9999-99-99")
     return {"as_of": as_of, "rows": rows}
 
@@ -1780,6 +1803,49 @@ def api_job(prod_order_no: str):
         "wm_number": _warehouse_movement(g),
         "stages": stages,
     }
+
+
+# ---------- estimated time ----------
+
+
+def minutes_lookup():
+    """Minutes per unit for a product group at a step, fallbacks resolved.
+
+    Product row first, then the default row, then BC's own estimate. Built
+    once per request — the catalogue is a read of the current snapshots.
+    """
+    stored = get_product_minutes()
+    defaults = stored.get(DEFAULT_GROUP, {})
+    bc = {e["group"]: e["bc_estimate"] for e in _product_catalogue()}
+
+    def lookup(group: str, stage: str):
+        value = (stored.get(group) or {}).get(stage)
+        if value is None:
+            value = defaults.get(stage)
+        if value is None:
+            value = bc.get(group)
+        return value
+
+    return lookup
+
+
+def _minutes_for(g: dict, stages, lookup) -> dict:
+    """A job's minutes per unit at each step.
+
+    A PRO is usually one item. Where it carries several, the mean across them
+    is used rather than picking one — the export doesn't keep each item's own
+    quantity once the rows are collapsed, so a weighted figure isn't available.
+    """
+    groups = [
+        product_group_key(item_no, desc)
+        for item_no, desc in zip(g.get("item_nos", []), g.get("items", []))
+    ] or [product_group_key(None, None)]
+
+    out = {}
+    for stage in stages:
+        values = [v for v in (lookup(grp, stage) for grp in groups) if v is not None]
+        out[stage] = round(sum(values) / len(values), 2) if values else None
+    return out
 
 
 # ---------- settings ----------
