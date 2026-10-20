@@ -424,6 +424,22 @@ PRO-330659: L2.02, L2.02, L2.03, L2.03</pre>
   Read only — <button type="button" class="link-btn" id="bannerSignIn">sign in</button> to make changes.
 </div>
 
+<div class="signin-backdrop" id="wmBulkBackdrop" hidden>
+  <div class="signin-card auto-card">
+    <h2>WM NUMBERS.</h2>
+    <p class="leveling-note">Paste one pair per line &mdash; <code>SO-12345: WM-678</code>, or rows copied straight out of BC's Warehouse Movements list. Either order works. Or upload the Warehouse Movements export.</p>
+    <textarea class="num-input wm-paste" id="wmBulkText" rows="8" placeholder="SO-187819: WM-80001&#10;WM-80002&#9;SO-187546&#9;PINKENBA"></textarea>
+    <div class="auto-actions">
+      <input type="file" id="wmBulkFile" accept=".xlsx,.xls,.csv" hidden>
+      <button type="button" class="btn" id="wmBulkUpload">Upload export…</button>
+      <span class="gantt-spacer"></span>
+      <button type="button" class="btn" id="wmBulkCancel">Cancel</button>
+      <button type="button" class="btn btn-primary" id="wmBulkSave">Save numbers</button>
+    </div>
+    <div class="auto-result" id="wmBulkResult" hidden></div>
+  </div>
+</div>
+
 <div class="signin-backdrop" id="autoBackdrop" hidden>
   <form class="signin-card auto-card" id="autoForm">
     <h2>AUTO-SCHEDULE.</h2>
@@ -531,7 +547,15 @@ PRO-330659: L2.02, L2.02, L2.03, L2.03</pre>
     <h2 id="wmTitle">Warehouse movement</h2>
     <p class="signin-note" id="wmFor" hidden></p>
     <div class="wm-list" id="wmList"></div>
+    <div class="wm-entry" id="wmEntry" hidden>
+      <label class="capacity-label">Movement number
+        <input type="text" class="num-input" id="wmInput" placeholder="WM-1234" autocomplete="off">
+      </label>
+      <button type="button" class="btn btn-primary" id="wmSave">Save</button>
+      <button type="button" class="btn" id="wmClear">Clear</button>
+    </div>
     <div class="signin-actions">
+      <button type="button" class="btn" id="wmBulkOpen">Bulk paste or upload…</button>
       <button type="button" class="btn" id="wmClose">Close</button>
     </div>
   </div>

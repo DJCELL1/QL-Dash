@@ -254,6 +254,28 @@ overloads a day.
 Both refuse a line with no schedulable first step, which is how powdercoating
 is turned away.
 
+## Warehouse movement numbers
+
+A number used to be read only out of BC's Comments column. It can now also be
+stored per sales order in `sales_order_wm`, and `_warehouse_movement()` prefers
+the stored one - somebody typed that on purpose, and Comments was only ever
+being scraped because there was nowhere else to put it. Clearing a stored
+number falls back to the export again.
+
+`parse_wm_line()` reads one line by finding each token anywhere on it, so
+`SO-123: WM-456` and a tab-separated row out of BC's Warehouse Movements list
+both work whichever order they are in. With no `WM` prefix, a single other
+number on the line is taken as the movement; two would be a guess, so it
+refuses. A line carrying neither token is skipped silently, because a column
+header is not an error worth reporting.
+
+`POST /api/wm/upload` flattens each row of an export to a line and runs the
+same parser, so the column layout doesn't matter.
+
+The WM flag on a sales order is drawn even when there is no number, dimmed, so
+the first one can be typed in. Without that there is no way to add one to an
+order BC has no comment on.
+
 ## Auth
 
 Signed cookie `prodash_session`, 30 days. Reading is open to anyone with the

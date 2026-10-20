@@ -2293,3 +2293,11 @@ body.is-gantt-open { overflow: hidden; }
 .btn-primary { background: var(--accent-solid); color: var(--accent-on); border-color: var(--accent-solid); }
 .btn-primary:hover:not(:disabled) { filter: brightness(1.08); }
 .auto-result { margin-top: 10px; font-size: 12px; white-space: pre-line; color: var(--text-secondary); }
+
+/* ---------- wm entry ---------- */
+
+.wm-entry { display: flex; align-items: flex-end; gap: 8px; margin-top: 12px; }
+.wm-entry .num-input { width: 160px; }
+.wm-paste { width: 100%; font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size: 12px; }
+
+.wm-flag.is-empty { opacity: 0.4; font-weight: 600; }

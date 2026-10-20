@@ -113,6 +113,16 @@ CREATE INDEX IF NOT EXISTS idx_progress_events_pro ON progress_events (prod_orde
 
 -- Hours actually worked at a step on a day, typed in on the Efficiency tab.
 -- Absent means nobody has said, and the hours available stand in.
+-- Warehouse movement numbers entered here, rather than read out of BC's
+-- Comments column. One per sales order, and it wins over whatever the export
+-- happened to say.
+CREATE TABLE IF NOT EXISTS sales_order_wm (
+    sales_order_no TEXT PRIMARY KEY,
+    wm_number TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    set_by TEXT NOT NULL DEFAULT ''
+);
+
 CREATE TABLE IF NOT EXISTS actual_hours (
     the_date TEXT NOT NULL,
     stage TEXT NOT NULL,
@@ -1033,6 +1043,28 @@ def set_sub_status(prod_order_no: str, work_centre_no: str, **fields) -> dict:
 
 
 # ---------- users and settings ----------
+
+
+def get_sales_order_wms() -> dict[str, str]:
+    with get_conn() as conn:
+        return {r["sales_order_no"]: r["wm_number"]
+                for r in conn.execute("SELECT sales_order_no, wm_number FROM sales_order_wm")}
+
+
+def set_sales_order_wm(sales_order_no: str, wm_number: str | None, set_by: str = "") -> None:
+    """A blank clears it, so the number from the export is used again."""
+    from datetime import datetime, timezone
+
+    with get_conn() as conn:
+        if not wm_number:
+            conn.execute("DELETE FROM sales_order_wm WHERE sales_order_no = ?", (sales_order_no,))
+            return
+        conn.execute(
+            "INSERT INTO sales_order_wm (sales_order_no, wm_number, updated_at, set_by) VALUES (?, ?, ?, ?) "
+            "ON CONFLICT(sales_order_no) DO UPDATE SET wm_number = excluded.wm_number, "
+            "updated_at = excluded.updated_at, set_by = excluded.set_by",
+            (sales_order_no, wm_number, datetime.now(timezone.utc).isoformat(), set_by),
+        )
 
 
 def get_actual_hours(date_from: str | None = None, date_to: str | None = None) -> dict[tuple[str, str], float]:

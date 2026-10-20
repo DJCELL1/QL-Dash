@@ -248,7 +248,9 @@
 
   function showWm(numbers, so) {
     const list = numbers.map((n) => String(n).trim()).filter(Boolean);
-    if (list.length === 0) return;
+    // Opening with nothing is the point when you're adding the first number.
+    if (list.length === 0 && !so) return;
+    wmFor = so || null;
 
     $("#wmTitle").textContent = list.length === 1 ? "Warehouse movement" : "Warehouse movements";
     const forLine = $("#wmFor");
@@ -279,8 +281,28 @@
       });
     });
 
+    renderWmEntry(list);
     wmOpen = true;
     $("#wmBackdrop").hidden = false;
+  }
+
+  function renderWmEntry(list) {
+    const entry = $("#wmEntry");
+    entry.hidden = !wmFor;
+    if (!wmFor) return;
+    $("#wmInput").value = list.length === 1 ? list[0] : "";
+    $("#wmClear").hidden = list.length === 0;
+  }
+
+  async function saveWmNumber(value) {
+    try {
+      await postJSON("/api/wm", { sales_order_no: wmFor, wm_number: value });
+      await Promise.all([loadFactory(), loadCavities(), loadPowdercoat()]);
+      hideWm();
+      render();
+    } catch (e) {
+      notifyError(e, "Couldn't save that number.");
+    }
   }
 
   function hideWm() {
@@ -288,8 +310,16 @@
     $("#wmBackdrop").hidden = true;
   }
 
+  let wmFor = null;
+
   function wireWm() {
     $("#wmClose").addEventListener("click", hideWm);
+    $("#wmSave").addEventListener("click", () => saveWmNumber($("#wmInput").value.trim()));
+    $("#wmClear").addEventListener("click", () => saveWmNumber(""));
+    $("#wmInput").addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { e.preventDefault(); saveWmNumber($("#wmInput").value.trim()); }
+    });
+    $("#wmBulkOpen").addEventListener("click", () => { hideWm(); openWmBulk(); });
     $("#wmBackdrop").addEventListener("click", (e) => {
       if (e.target === $("#wmBackdrop")) hideWm();
     });
@@ -2937,9 +2967,9 @@
 
     const badge = posted
       ? `<span class="posted-flag" title="Posted in Business Central — off the latest export, kept here as the record of the day">POSTED</span>`
-      : wm
-        ? `<span class="wm-flag" role="button" tabindex="0" data-wm="${escapeAttr(wm)}" data-wm-so="${escapeAttr(so)}" title="Warehouse movement${wmNumbers.length > 1 ? "s" : ""} — click for the number">WM</span>`
-        : "";
+      // Shown even with no number, so the first one can be typed in. There is
+      // nowhere else to add one for a sales order BC has no comment on.
+      : `<span class="wm-flag ${wm ? "" : "is-empty"}" role="button" tabindex="0" data-wm="${escapeAttr(wm || "")}" data-wm-so="${escapeAttr(so)}" title="${wm ? `Warehouse movement${wmNumbers.length > 1 ? "s" : ""} — click for the number` : "No warehouse movement number — click to add one"}">WM</span>`;
     return { badge, posted };
   }
 
@@ -4061,6 +4091,68 @@
       hours += (c.qty || 0) * mins / 60;
     }
     return { hours, unpriced };
+  }
+
+  // ---------- wm numbers in bulk ----------
+
+  function summariseWm(res) {
+    const lines = [`Saved ${res.saved.length} number${res.saved.length === 1 ? "" : "s"}.`];
+    if (res.unreadable.length) {
+      lines.push(`Couldn't read ${res.unreadable.length} line${res.unreadable.length === 1 ? "" : "s"}:`);
+      for (const u of res.unreadable.slice(0, 6)) lines.push(`  ${u}`);
+      if (res.unreadable.length > 6) lines.push(`  …and ${res.unreadable.length - 6} more`);
+    }
+    return lines.join("\n");
+  }
+
+  function openWmBulk() {
+    $("#wmBulkText").value = "";
+    $("#wmBulkResult").hidden = true;
+    $("#wmBulkBackdrop").hidden = false;
+    $("#wmBulkText").focus();
+  }
+
+  async function afterWm(res) {
+    const out = $("#wmBulkResult");
+    out.textContent = summariseWm(res);
+    out.hidden = false;
+    await Promise.all([loadFactory(), loadCavities(), loadPowdercoat()]);
+    render();
+  }
+
+  function wireWmBulk() {
+    const backdrop = $("#wmBulkBackdrop");
+    const close = () => { backdrop.hidden = true; };
+    $("#wmBulkCancel").onclick = close;
+    backdrop.addEventListener("click", (e) => { if (e.target === backdrop) close(); });
+
+    $("#wmBulkSave").onclick = async () => {
+      const text = $("#wmBulkText").value.trim();
+      if (!text) { notifyError(null, "Nothing pasted yet."); return; }
+      try {
+        await afterWm(await postJSON("/api/wm/bulk", { text }));
+      } catch (e) {
+        notifyError(e, "Couldn't save those numbers.");
+      }
+    };
+
+    $("#wmBulkUpload").onclick = () => $("#wmBulkFile").click();
+    $("#wmBulkFile").onchange = async () => {
+      const file = $("#wmBulkFile").files[0];
+      if (!file) return;
+      const form = new FormData();
+      form.append("file", file);
+      try {
+        const res = await fetch("/api/wm/upload", { method: "POST", body: form });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || "Upload failed.");
+        await afterWm(data);
+      } catch (e) {
+        notifyError(e, "Couldn't read that file.");
+      } finally {
+        $("#wmBulkFile").value = "";
+      }
+    };
   }
 
   // ---------- auto-scheduling ----------
@@ -6663,6 +6755,7 @@
   wireHuddle();
   wireGantt();
   wireAutoSchedule();
+  wireWmBulk();
   wireUnitTracker();
   wireCavities();
   wireFactoryDayNav();

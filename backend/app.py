@@ -18,50 +18,50 @@ from db import (
     OverBooked,
     all_snapshots,
     backup_to,
-    restore_from,
     create_schedule_entry,
     create_schedule_entry_checked,
+    delete_day_override,
     delete_schedule_entry,
     first_seen_dates,
+    get_actual_hours,
+    get_all_purchase_orders,
     get_all_schedule_entries,
     get_all_stage_progress,
+    get_all_sub_status,
+    get_day_overrides,
     get_day_plans,
     get_day_priorities,
-    set_day_priorities,
-    join_schedule_entries,
-    lock_day,
-    unlock_day,
+    get_product_minutes,
+    get_progress_events,
     get_records_for_snapshot,
-    get_all_purchase_orders,
-    get_all_sub_status,
+    get_sales_order_wms,
     get_schedule_entry,
     get_stage_progress,
-    set_sub_status,
+    get_work_hours,
     history_counts,
     init_db,
-    delete_day_override,
-    get_day_overrides,
-    get_product_minutes,
-    delete_schedule_entry,
-    get_actual_hours,
-    get_all_schedule_entries,
-    get_progress_events,
-    set_actual_hours,
-    get_work_hours,
+    join_schedule_entries,
     latest_snapshot,
-    set_day_override,
-    set_product_minutes,
-    set_work_hours,
+    lock_day,
     pros_with_dated_schedule,
-    records_last_seen,
     recent_audit,
+    records_last_seen,
     reset_stage_progress,
+    restore_from,
+    set_actual_hours,
+    set_day_override,
+    set_day_priorities,
+    set_product_minutes,
+    set_sales_order_wm,
     set_stage_progress,
-    write_audit,
+    set_sub_status,
+    set_work_hours,
     sum_scheduled_qty,
     unallocate_dates,
     unallocate_pros,
+    unlock_day,
     update_schedule_entry,
+    write_audit,
 )
 from db import (
     count_admins,
@@ -801,13 +801,21 @@ def _pro_totals(dataset: str = "joinery") -> tuple[str | None, dict[str, dict]]:
 WM_RE = re.compile(r"WM[\s\-:#]*(\d+)", re.IGNORECASE)
 
 
-def _warehouse_movement(g: dict) -> str | None:
+def _warehouse_movement(g: dict, stored: dict | None = None) -> str | None:
     """The movement number, always written back as WM-1234.
 
     However it was typed, it leaves here in one shape — the number gets copied
     and pasted into other systems, and it should look the same every time
     rather than carrying whoever typed it into BC that day.
+
+    A number entered here wins over whatever the export said: somebody typed it
+    on purpose, and BC's Comments column is where it was being read from only
+    because there was nowhere else to put it.
     """
+    if stored:
+        typed = stored.get(g.get("sales_order_no") or "")
+        if typed:
+            return typed
     for text in g.get("comments", []):
         m = WM_RE.search(text or "")
         if m:
@@ -827,7 +835,7 @@ def _single_item_no(g: dict) -> str | None:
 
 
 def _factory_row(pro: str, g: dict, progress: dict, door_numbers: dict | None = None,
-                 job_names: dict | None = None) -> dict | None:
+                 job_names: dict | None = None, wms: dict | None = None) -> dict | None:
     total = g["total_qty"]
     if total <= 0:
         return None
@@ -853,7 +861,7 @@ def _factory_row(pro: str, g: dict, progress: dict, door_numbers: dict | None = 
         "item_summary": g["items"][0] if len(g["items"]) == 1 else f"{len(g['items'])} items",
         "item_no": _single_item_no(g),
         "posted": posted,
-        "wm_number": _warehouse_movement(g),
+        "wm_number": _warehouse_movement(g, wms),
         # The marks for this job's doors, in door order, for the label. Empty
         # when the job has none or hasn't been asked about yet; door_numbers_set
         # is what tells those two apart, and so what drives the asking.
@@ -886,9 +894,10 @@ def api_factory():
     door_numbers = get_all_door_numbers()
     job_names = get_all_sales_orders()
     lookup = minutes_lookup()
+    wms = get_sales_order_wms()
     rows = []
     for pro, g in grouped.items():
-        row = _factory_row(pro, g, progress, door_numbers, job_names)
+        row = _factory_row(pro, g, progress, door_numbers, job_names, wms)
         if row is not None:
             row["minutes"] = _minutes_for(g, STAGES, lookup)
             rows.append(row)
@@ -993,7 +1002,7 @@ CAVITY_STAGES = ("cav_prep", "cav_make")
 CAVITY_STAGE_LABELS = {"cav_prep": "Prep", "cav_make": "Make"}
 
 
-def _cavity_row(pro: str, g: dict, progress: dict) -> dict | None:
+def _cavity_row(pro: str, g: dict, progress: dict, wms: dict | None = None) -> dict | None:
     total = g["total_qty"]
     if total <= 0:
         return None
@@ -1009,7 +1018,7 @@ def _cavity_row(pro: str, g: dict, progress: dict) -> dict | None:
         "source_name": g["source_name"],
         "item_summary": g["items"][0] if len(g["items"]) == 1 else f"{len(g['items'])} items",
         "posted": posted,
-        "wm_number": _warehouse_movement(g),
+        "wm_number": _warehouse_movement(g, wms),
         "due_date": min(g["due_dates"]) if g["due_dates"] else None,
         "total_qty": total,
         "shortage": bool(g.get("shortage")),
@@ -1031,9 +1040,10 @@ def api_cavities():
 
     progress = get_all_stage_progress()
     lookup = minutes_lookup()
+    wms = get_sales_order_wms()
     rows = []
     for pro, g in grouped.items():
-        row = _cavity_row(pro, g, progress)
+        row = _cavity_row(pro, g, progress, wms)
         if row is not None:
             row["minutes"] = _minutes_for(g, CAVITY_STAGES, lookup)
             rows.append(row)
@@ -1095,7 +1105,7 @@ PC_STAGE_LABELS = {"pc_prep": "Prep", "pc_coat": "Coat", "pc_pack": "Pack"}
 PC_DATASET = "subcontractors"
 
 
-def _pc_row(pro: str, g: dict, progress: dict) -> dict | None:
+def _pc_row(pro: str, g: dict, progress: dict, wms: dict | None = None) -> dict | None:
     total = g["total_qty"]
     if total <= 0:
         return None
@@ -1111,7 +1121,7 @@ def _pc_row(pro: str, g: dict, progress: dict) -> dict | None:
         "source_name": g["source_name"],
         "item_summary": g["items"][0] if len(g["items"]) == 1 else f"{len(g['items'])} items",
         "posted": posted,
-        "wm_number": _warehouse_movement(g),
+        "wm_number": _warehouse_movement(g, wms),
         "due_date": min(g["due_dates"]) if g["due_dates"] else None,
         "total_qty": total,
         "shortage": bool(g.get("shortage")),
@@ -1133,9 +1143,10 @@ def api_powdercoat():
 
     progress = get_all_stage_progress()
     lookup = minutes_lookup()
+    wms = get_sales_order_wms()
     rows = []
     for pro, g in grouped.items():
-        row = _pc_row(pro, g, progress)
+        row = _pc_row(pro, g, progress, wms)
         if row is not None:
             row["minutes"] = _minutes_for(g, PC_STAGES, lookup)
             rows.append(row)
@@ -1776,6 +1787,7 @@ def api_job(prod_order_no: str):
     total = g["total_qty"]
     progress = dict(get_stage_progress(prod_order_no) or {})
     events = get_progress_events(prod_order_no=prod_order_no)
+    wms = get_sales_order_wms()
 
     # Fractional quantities (powdercoat is cut in lengths) can't be a grid of
     # whole units, so the tracker falls back to the quantity on those jobs.
@@ -1804,7 +1816,7 @@ def api_job(prod_order_no: str):
         "due_date": min(g["due_dates"]) if g.get("due_dates") else None,
         "total_qty": total,
         "whole_units": whole_units,
-        "wm_number": _warehouse_movement(g),
+        "wm_number": _warehouse_movement(g, wms),
         "stages": stages,
     }
 
@@ -2093,6 +2105,126 @@ def api_set_planning(request: Request, body: PlanningIn):
     set_setting("planning", json.dumps(merged))
     write_audit(actor(request), "settings.planning", ", ".join(sorted(body.values)))
     return merged
+
+
+# ---------- warehouse movement numbers ----------
+
+# A sales order and a movement number, however the line is laid out. BC's
+# Warehouse Movements list puts them in columns and people paste
+# "SO-123: WM-456" by hand; finding each token anywhere on the line copes with
+# both without caring which came first.
+_SO_TOKEN = re.compile(r"\bSO[\s\-:#]*(\d{4,})\b", re.IGNORECASE)
+_WM_TOKEN = re.compile(r"\bWM[\s\-:#]*(\d{2,})\b", re.IGNORECASE)
+_BARE_NUMBER = re.compile(r"\b(\d{3,})\b")
+
+
+def parse_wm_line(line: str) -> tuple[str, str] | None:
+    """(sales order, movement number) from one line, or None."""
+    so = _SO_TOKEN.search(line)
+    if not so:
+        return None
+    sales_order = f"SO-{so.group(1)}"
+
+    wm = _WM_TOKEN.search(line)
+    if wm:
+        return sales_order, f"WM-{wm.group(1)}"
+
+    # No WM prefix: take a lone other number, so a two-column paste still
+    # works. More than one and it's a guess, so don't.
+    others = [n for n in _BARE_NUMBER.findall(line) if n != so.group(1)]
+    if len(others) == 1:
+        return sales_order, f"WM-{others[0]}"
+    return None
+
+
+def _apply_wm_lines(lines, actor_name: str) -> dict:
+    saved, unreadable = [], []
+    for raw in lines:
+        text = str(raw).strip()
+        if not text:
+            continue
+        parsed = parse_wm_line(text)
+        if parsed is None:
+            # Only complain about a line that was trying to be a pair. A column
+            # header or a blank row in the middle of an export is not an error.
+            if _SO_TOKEN.search(text) or _WM_TOKEN.search(text):
+                unreadable.append(text[:120])
+            continue
+        sales_order, wm = parsed
+        set_sales_order_wm(sales_order, wm, actor_name)
+        saved.append({"sales_order_no": sales_order, "wm_number": wm})
+    return {"saved": saved, "unreadable": unreadable}
+
+
+@app.get("/api/wm")
+def api_wm_list():
+    return {"wms": get_sales_order_wms()}
+
+
+class WmIn(BaseModel):
+    sales_order_no: str
+    wm_number: str | None = None
+
+
+@app.post("/api/wm")
+def api_wm_set(request: Request, body: WmIn):
+    sales_order = body.sales_order_no.strip()
+    if not sales_order:
+        raise HTTPException(status_code=400, detail="Which sales order?")
+    number = (body.wm_number or "").strip()
+    if number:
+        m = WM_RE.search(number) or _BARE_NUMBER.search(number)
+        if not m:
+            raise HTTPException(status_code=400, detail=f"'{number}' doesn't look like a movement number.")
+        number = f"WM-{m.group(1)}"
+    set_sales_order_wm(sales_order, number or None, actor(request))
+    write_audit(actor(request), "wm.set", f"{sales_order} -> {number or 'cleared'}")
+    return {"sales_order_no": sales_order, "wm_number": number or None}
+
+
+class WmBulkIn(BaseModel):
+    text: str
+
+
+@app.post("/api/wm/bulk")
+def api_wm_bulk(request: Request, body: WmBulkIn):
+    result = _apply_wm_lines(body.text.splitlines(), actor(request))
+    write_audit(actor(request), "wm.bulk",
+                f"{len(result['saved'])} saved, {len(result['unreadable'])} unreadable")
+    return result
+
+
+@app.post("/api/wm/upload")
+async def api_wm_upload(request: Request, file: UploadFile = File(...)):
+    """A Warehouse Movements export, read row by row.
+
+    Each row is flattened to a line and run through the same parser as a paste,
+    so it doesn't matter which columns the export happens to have or what order
+    they're in.
+    """
+    suffix = Path(file.filename or "").suffix.lower()
+    if suffix not in SUPPORTED_EXTENSIONS:
+        raise HTTPException(status_code=400, detail=f"{file.filename} isn't an .xlsx, .xls or .csv file.")
+
+    import pandas as pd
+
+    with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
+        tmp.write(await file.read())
+        tmp_path = Path(tmp.name)
+    try:
+        frame = pd.read_csv(tmp_path) if suffix == ".csv" else pd.read_excel(tmp_path)
+        lines = [" ".join("" if v is None else str(v) for v in row) for row in frame.itertuples(index=False)]
+        # The header can carry the pair too when the export has no real header.
+        lines.insert(0, " ".join(str(c) for c in frame.columns))
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Couldn't read {file.filename}: {exc}")
+    finally:
+        tmp_path.unlink(missing_ok=True)
+
+    result = _apply_wm_lines(lines, actor(request))
+    write_audit(actor(request), "wm.upload",
+                f"{file.filename}: {len(result['saved'])} saved, {len(result['unreadable'])} unreadable")
+    return result
 
 
 # ---------- auto-scheduling ----------
