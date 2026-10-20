@@ -95,6 +95,13 @@ CREATE TABLE IF NOT EXISTS processed_files (
 
 CREATE TABLE IF NOT EXISTS stage_progress (
     prod_order_no TEXT PRIMARY KEY,
+    cut_to_size_done REAL NOT NULL DEFAULT 0,
+    machining_done REAL NOT NULL DEFAULT 0,
+    components_done REAL NOT NULL DEFAULT 0,
+    build_done REAL NOT NULL DEFAULT 0,
+    wrap_done REAL NOT NULL DEFAULT 0,
+    -- The WA door line's stages. Queensland doesn't run them, but the columns
+    -- stay so a database carrying that history keeps it.
     make_done REAL NOT NULL DEFAULT 0,
     press_done REAL NOT NULL DEFAULT 0,
     cnc_done REAL NOT NULL DEFAULT 0,
@@ -231,6 +238,13 @@ CREATE TABLE IF NOT EXISTS sub_job_status (
 """
 
 STAGE_COLUMNS = {
+    # The Queensland aluminium door line, in shop order.
+    "cut_to_size": "cut_to_size_done",
+    "machining": "machining_done",
+    "components": "components_done",
+    "build": "build_done",
+    "wrap": "wrap_done",
+    # WA's door line, kept so its recorded progress still reads back.
     "make": "make_done",
     "press": "press_done",
     "cnc": "cnc_done",
@@ -265,7 +279,9 @@ def _add_missing_columns(conn) -> None:
 
     have = {r[1] for r in conn.execute("PRAGMA table_info(stage_progress)")}
     added = []
-    for column in ("glazing_done", "edge_strip_done", "cav_prep_done", "cav_make_done"):
+    for column in ("glazing_done", "edge_strip_done", "cav_prep_done", "cav_make_done",
+                   "cut_to_size_done", "machining_done", "components_done",
+                   "build_done", "wrap_done"):
         if column not in have:
             conn.execute(f"ALTER TABLE stage_progress ADD COLUMN {column} REAL NOT NULL DEFAULT 0")
             added.append(column)

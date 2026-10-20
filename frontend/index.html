@@ -245,16 +245,24 @@ PRO-330659: L2.02, L2.02, L2.03, L2.03</pre>
         <h2>Door schedule</h2>
         <div class="capacity-controls">
           <label class="capacity-label">
-            Press +d
-            <input type="number" class="num-input" id="offset-press" min="0" step="1" value="0">
+            Machining +d
+            <input type="number" class="num-input" id="offset-machining" min="0" step="1" value="0">
           </label>
           <label class="capacity-label">
-            CNC +d
-            <input type="number" class="num-input" id="offset-cnc" min="0" step="1" value="1">
+            Components +d
+            <input type="number" class="num-input" id="offset-components" min="0" step="1" value="1">
+          </label>
+          <label class="capacity-label">
+            Build +d
+            <input type="number" class="num-input" id="offset-build" min="0" step="1" value="1">
+          </label>
+          <label class="capacity-label">
+            Wrap +d
+            <input type="number" class="num-input" id="offset-wrap" min="0" step="1" value="1">
           </label>
         </div>
       </div>
-      <p class="leveling-note">New work from an export waits in Holding, soonest due date first — drag it onto a day to schedule it. Days only show work someone has actually committed to. Dragging Make brings that job's Press and CNC along, CNC landing the day after. Solid cards are confirmed and print-ready; dashed CNC and Press cards follow their Make and firm up when you drag them. Drag anything back into Holding to set it aside. Finish isn't scheduled here for now.</p>
+      <p class="leveling-note">New work from an export waits in Holding, soonest due date first — drag it onto a day to schedule it. Days only show work someone has actually committed to. Dragging Cut to size brings the rest of that job's stages along, each landing the number of days after the one before it set above. Solid cards are confirmed and print-ready; dashed cards follow their Cut to size and firm up when you drag them. Drag anything back into Holding to set it aside.</p>
       <div class="schedule-nav">
         <button class="btn" id="schedule-prev">‹ Prev</button>
         <span id="schedule-range"></span>

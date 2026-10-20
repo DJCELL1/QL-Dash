@@ -646,59 +646,27 @@ def api_history(dataset: str):
     return {"dataset": dataset, "history": history_counts(dataset)}
 
 
-# Every stage that can exist, in the order work moves through the shop. Glazing
-# and edge stripping only apply to some doors, so a job's own list is a subset of
-# this — see _stages_for().
-STAGES = ("make", "press", "cnc", "glazing", "edge_strip", "finish")
+# The aluminium door line at Queensland, in the order work moves through it.
+# Every door runs all five — there are no optional stages on this line.
+STAGES = ("cut_to_size", "machining", "components", "build", "wrap")
 STAGE_LABELS = {
-    "make": "Make",
-    "press": "Press",
-    "cnc": "CNC",
-    "glazing": "Glazing",
-    "edge_strip": "Edge strip",
-    "finish": "Finish",
+    "cut_to_size": "Cut to size",
+    "machining": "Machining",
+    "components": "Components",
+    "build": "Build",
+    "wrap": "Wrap",
 }
 
-# The four every door goes through.
-BASE_STAGES = ("make", "press", "cnc", "finish")
-
-# BC flags these in the item description as a standalone code: "VP" for a vision
-# panel (needs glazing) and "ES" for edge stripping. The lookarounds are what
-# make it "by itself" — without them "ES" would hit SKINS, DOORS and half the
-# catalogue, and "VP" would hit any part code ending in it.
-OPTIONAL_STAGE_MARKERS = {
-    "glazing": re.compile(r"(?<![A-Za-z0-9])VP(?![A-Za-z0-9])", re.IGNORECASE),
-    "edge_strip": re.compile(r"(?<![A-Za-z0-9])ES(?![A-Za-z0-9])", re.IGNORECASE),
-}
-
-# The other way a door announces a vision panel, and the one BC fills in by
-# itself: the routing carries an extra CNC operation to cut the hole for it.
-# Matched on the operation rather than the work centre, because the centre is
-# plain JOINERY-30-CNC on every door whether it has a panel or not.
-GLAZING_OPERATIONS = ("view panel cut out",)
-
+BASE_STAGES = STAGES
 
 def _stages_for(g: dict) -> tuple[str, ...]:
-    """The stages this job actually goes through, in shop order.
+    """The stages this job goes through, in shop order.
 
-    Glazing and edge stripping sit between CNC and Finish, and only appear when
-    the job asks for them. A job can need both.
-
-    Glazing has two tells and either one is enough: a "View Panel Cut Out"
-    operation in the routing, which BC puts there on its own, or a standalone
-    VP typed into the item description.
+    Every aluminium door runs the same five. The WA line had optional glazing
+    and edge-stripping stages keyed off markers in the item description; this
+    line has no such branch, so each job gets the full list.
     """
-    text = " ".join(d for d in g.get("items", []) if d)
-    extra = [s for s, rx in OPTIONAL_STAGE_MARKERS.items() if rx.search(text)]
-
-    ops = " ".join(o for o in g.get("operations", ()) if o).lower()
-    if "glazing" not in extra and any(op in ops for op in GLAZING_OPERATIONS):
-        extra.append("glazing")
-
-    if not extra:
-        return BASE_STAGES
-    # shop order, not the order they were spotted in
-    return ("make", "press", "cnc", *[s for s in ("glazing", "edge_strip") if s in extra], "finish")
+    return BASE_STAGES
 
 # entries parked here aren't committed to a date — matches HOLDING_DATE in app.js
 HOLDING_DATE = "holding"
@@ -857,7 +825,7 @@ def _factory_row(pro: str, g: dict, progress: dict, door_numbers: dict | None = 
     # is left alone rather than rounded up to 100: it says what was recorded,
     # and POSTED already says the job is done.
     posted = bool(g.get("posted"))
-    status = "completed" if posted or done["finish"] >= total else "in_production"
+    status = "completed" if posted or done[STAGES[-1]] >= total else "in_production"
 
     row = {
         "prod_order_no": pro,

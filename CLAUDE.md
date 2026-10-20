@@ -86,6 +86,29 @@ schedule read the doors. Powdercoating is in house at Queensland: the board
 shows no purchase-order tracking, and `PC-10-Q` is mapped to a display name in
 `SUB_CONTRACTOR_NAMES` even though it isn't a contractor.
 
+## Door stages
+
+The aluminium door line runs five stages, in this order, and every door runs
+all of them:
+
+`cut_to_size` -> `machining` -> `components` -> `build` -> `wrap`
+
+They are declared once in `STAGES` / `STAGE_LABELS` (`backend/app.py`) and
+mirrored in `FACTORY_STAGES` / `STAGE_LABELS` (`frontend/app.js`) and
+`floor.js`. Progress is one column per stage in `stage_progress`
+(`<stage>_done`), registered in `STAGE_COLUMNS` in `db.py`. The first stage
+anchors scheduling and the "remaining to start" figure; the last decides
+whether a job counts as completed - both are read as `STAGES[0]` / `STAGES[-1]`
+rather than by name, so reordering the tuple is enough.
+
+The WA line's stages (`make`, `press`, `cnc`, `glazing`, `edge_strip`,
+`finish`) are out of the flow, but their columns stay in the table and in
+`STAGE_COLUMNS` so a database carrying that history still reads back. WA also
+picked two optional stages per job from markers in the item description; that
+branch is gone, and `_stages_for()` now returns the same five every time.
+
+Cavities are a separate two-step line (`cav_prep`, `cav_make`), unaffected.
+
 ## Auth
 
 Signed cookie `prodash_session`, 30 days. Reading is open to anyone with the
