@@ -2787,7 +2787,10 @@
     return map;
   }
 
-  const STAGE_TAG_LETTER = { make: "M", press: "P", cnc: "C", glazing: "G", edge_strip: "E", finish: "F" };
+  // The badge on a schedule card. Derived from the stage order rather than
+  // written out, so adding or reordering a stage can't leave it stale — and
+  // positions beat initials here, since Cut to size and Components share one.
+  const STAGE_TAG_LETTER = Object.fromEntries(FACTORY_STAGES.map((s, i) => [s, String(i + 1)]));
 
   // How far through this stage the job is, straight from Factory floor entries.
   // 2 of 4 doors made => 0.5 on that PRO's Make card.
@@ -2832,7 +2835,7 @@
     return `<div class="${cls}"${progressFillStyle(p.pct)} draggable="true" data-card-key="${escapeAttr(cardKey)}" data-pro="${card.pro}" data-stage="${card.stage}" data-qty="${card.qty}" data-entry-id="${card.entryId ?? ""}" data-confirmed="${card.confirmed}" data-progress="${Math.round(p.pct * 100)}" title="${stageLabel(card.stage)} — ${fmtNum(p.done)} of ${fmtNum(p.total)} done — ${card.item || ""}">
       ${actions}
       <input type="checkbox" class="schedule-card-pick" data-card-key="${escapeAttr(cardKey)}" ${picked ? "checked" : ""} title="Select this PRO to move with others">
-      <span class="stage-dot" title="${stageLabel(card.stage)}">${STAGE_TAG_LETTER[card.stage]}</span>
+      <span class="stage-dot" title="${stageLabel(card.stage)}">${STAGE_TAG_LETTER[card.stage] || ""}</span>
       <span class="sc-pro">${card.pro}</span>
       <span class="sc-so">${card.so || ""}</span>
       <span class="sc-meta">${fmtNum(card.qty)}× ${card.customer || ""}</span>
