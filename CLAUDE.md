@@ -199,6 +199,36 @@ scheduled. Attainment is null when nothing was planned, rather than infinite.
 A PRO that has left the exports has no product group, so it falls back to the
 `__default__` minutes row; without one it earns nothing and the day under-reads.
 
+## Gantt and the unit tracker
+
+The Gantt is a full-screen overlay opened by the small table button on each day
+of a schedule board. It draws entirely from data already loaded - schedule
+entries, job rows (which carry `minutes`) and Settings - so it has no endpoint
+of its own.
+
+One row per step. Sales-order blocks lie end to end from the shift start in
+board order (`sequence`); block length is qty x minutes per unit. The red line
+is the end of shift, from the hours that day was given, and anything past it is
+hatched as overtime.
+
+Only doors and cavities appear: powdercoating isn't in `SCHEDULABLE_STAGES`, so
+it has no scheduled day to lay out.
+
+`predecessorFlag()` compares a job's previous step: warning when it isn't
+scheduled at all or sits after this one, hourglass when it ran earlier and
+isn't finished.
+
+Clicking a PRO bar opens the unit tracker, which reads `/api/job/{pro}` - the
+grid of units against steps with a time on each unit. Clicking unit N sets the
+running total to N, and clicking a unit already done takes it back to N-1.
+Every tick re-reads the job rather than patching the grid, because the server
+decides what a tick is allowed to be and a refusal must not leave the grid
+showing something it isn't. Jobs measured in lengths have no whole units, so
+they get a quantity box instead.
+
+A rule worth remembering: a CSS class that sets `display` beats the `hidden`
+attribute. Both overlays carry an explicit `[hidden] { display: none; }`.
+
 ## Auth
 
 Signed cookie `prodash_session`, 30 days. Reading is open to anyone with the

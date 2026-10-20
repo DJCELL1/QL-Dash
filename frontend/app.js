@@ -16,6 +16,8 @@
     cavities: { rows: [], as_of: null, search: "", windowStart: null },
     settings: null,
     efficiency: null,
+    tracker: null,
+    gantt: { date: null, line: "doors", tick: 30, openAreas: new Set(), openBlocks: new Set() },
     effRange: null,
     effOpenRows: new Set(),
     settingsLine: "doors",
@@ -372,6 +374,16 @@
   }
 
   // ---------- formatting helpers ----------
+
+  // A tick's time: the date only when it wasn't today, since the floor mostly
+  // wants to know the clock time of something it just did.
+  function fmtDateTime(iso) {
+    if (!iso) return "—";
+    const d = new Date(iso);
+    if (isNaN(d)) return "—";
+    const clock = d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+    return dateKey(d) === dateKey(new Date()) ? clock : `${fmtDate(iso)} ${clock}`;
+  }
 
   function fmtDate(iso) {
     if (!iso) return "—";
@@ -3777,6 +3789,9 @@
   }
 
   function wireSchedulePrintButtons() {
+    $$("#view-scheduling .print-btn[data-gantt-date]").forEach((btn) => {
+      btn.onclick = () => openGantt(btn.dataset.ganttDate);
+    });
     $$("#view-scheduling .print-btn[data-print-date]").forEach((btn) => {
       btn.addEventListener("click", () => buildAndPrint(btn.dataset.printDate));
     });
@@ -3968,6 +3983,7 @@
             <span class="day-label">${fmtDayDate(day)}</span>
             ${wholeDay && wholeDay.planned > 0 ? scoreHTML(wholeDay) : ""}
             ${lockBtn}
+            <button class="print-btn" type="button" data-gantt-date="${dKey}" title="Gantt for this day">▤</button>
             <button class="print-btn" type="button" data-print-date="${dKey}" title="Print this day">🖶</button>
           </div>
           ${stagesHtml}
@@ -4045,6 +4061,366 @@
       hours += (c.qty || 0) * mins / 60;
     }
     return { hours, unpriced };
+  }
+
+  // ---------- unit tracker ----------
+
+  // Which endpoint records a tick for this job's line.
+  const PROGRESS_URL = {
+    doors: "/api/factory/progress",
+    cavities: "/api/cavities/progress",
+    powdercoat: "/api/powdercoat/progress",
+  };
+
+  async function openUnitTracker(pro) {
+    let job;
+    try {
+      job = await fetchJSON(`/api/job/${encodeURIComponent(pro)}`);
+    } catch (e) {
+      notifyError(e, `Couldn't open ${pro}.`);
+      return;
+    }
+    state.tracker = job;
+    $("#trackerBackdrop").hidden = false;
+    renderUnitTracker();
+  }
+
+  function closeUnitTracker() {
+    $("#trackerBackdrop").hidden = true;
+    state.tracker = null;
+  }
+
+  async function setTrackerStage(stage, done) {
+    const job = state.tracker;
+    try {
+      await postJSON(PROGRESS_URL[job.line], { prod_order_no: job.prod_order_no, stage, done });
+    } catch (e) {
+      notifyError(e, "Couldn't record that.");
+    }
+    // Re-read rather than patch: the server decides what a tick is allowed to
+    // be, and a refusal must not leave the grid showing something it isn't.
+    await openUnitTracker(job.prod_order_no);
+    await Promise.all([loadFactory(), loadCavities(), loadPowdercoat()]);
+    if (!$("#ganttOverlay").hidden) renderGantt();
+  }
+
+  function renderUnitTracker() {
+    const job = state.tracker;
+    if (!job) return;
+    $("#tracker-title").textContent = `${job.prod_order_no} · ${job.line_label}`;
+    $("#tracker-sub").textContent = [
+      job.sales_order_no, job.source_name,
+      job.due_date ? `Due ${fmtDate(job.due_date)}` : null,
+      job.wm_number ? `WM ${job.wm_number}` : null,
+      `${fmtNum(job.total_qty)} units`,
+    ].filter(Boolean).join(" · ");
+
+    $("#tracker-body").innerHTML = job.stages.map((s) => {
+      const pct = job.total_qty ? Math.min(100, (s.done / job.total_qty) * 100) : 0;
+      const complete = job.total_qty > 0 && s.done >= job.total_qty;
+      const cells = job.whole_units
+        ? s.units.map((u) =>
+            `<button class="unit-cell ${u.done ? "is-done" : ""}" type="button"
+               data-stage="${s.stage}" data-unit="${u.unit}"
+               title="${u.at ? `Unit ${u.unit} — ${fmtDateTime(u.at)}` : `Unit ${u.unit} — not done`}">${u.unit}</button>`).join("")
+        : `<div class="cell-muted">Measured in lengths, so there are no whole units to tick. Enter the quantity instead:
+             <input type="number" class="num-input tracker-qty" min="0" step="0.25" data-stage="${s.stage}" value="${s.done}"></div>`;
+
+      return `<div class="tracker-stage ${complete ? "is-complete" : ""}">
+        <div class="tracker-stage-head">
+          <b>${escapeAttr(s.label)}</b>
+          <span class="tracker-count">${fmtNum(s.done)} of ${fmtNum(job.total_qty)} units${complete ? " ✓" : ""}</span>
+          <span class="gantt-spacer"></span>
+          <button class="btn" type="button" data-markall="${s.stage}">Mark all</button>
+          <button class="btn" type="button" data-clearall="${s.stage}">Clear all</button>
+        </div>
+        <div class="tracker-progress"><div class="tracker-progress-fill" style="width:${pct.toFixed(0)}%"></div></div>
+        <div class="tracker-units">${cells}</div>
+      </div>`;
+    }).join("");
+
+    $$("#tracker-body [data-markall]").forEach((b) => {
+      b.onclick = () => setTrackerStage(b.dataset.markall, job.total_qty);
+    });
+    $$("#tracker-body [data-clearall]").forEach((b) => {
+      b.onclick = () => setTrackerStage(b.dataset.clearall, 0);
+    });
+    $$("#tracker-body .unit-cell").forEach((b) => {
+      b.onclick = () => {
+        // Progress is a running count, so clicking unit N means "N done" —
+        // and clicking one already done takes it back to the one before.
+        const unit = Number(b.dataset.unit);
+        const stage = b.dataset.stage;
+        const current = job.stages.find((s) => s.stage === stage).done;
+        setTrackerStage(stage, unit <= current ? unit - 1 : unit);
+      };
+    });
+    $$("#tracker-body .tracker-qty").forEach((inp) => {
+      inp.onchange = () => setTrackerStage(inp.dataset.stage, Number(inp.value) || 0);
+    });
+  }
+
+  // ---------- gantt ----------
+
+  const GANTT_LABEL_W = 150;   // the area-name gutter, matched in the stylesheet
+  const MIN_BLOCK_PX = 3;
+
+  // Which lines the Gantt can draw. Powdercoating isn't schedulable, so it has
+  // no day to lay out — see SCHEDULABLE_STAGES on the server.
+  function ganttLines() {
+    const lines = settingsLines();
+    return Object.entries(lines).filter(([id]) => id === "doors" || id === "cavities");
+  }
+
+  function ganttStages() {
+    const lines = ganttLines();
+    const chosen = state.gantt.line === "all" ? lines : lines.filter(([id]) => id === state.gantt.line);
+    return chosen.flatMap(([id, line]) => line.stages.map((st) => ({ lineId: id, stage: st, label: line.labels[st] || st })));
+  }
+
+  function rowForPro(pro) {
+    return state.factoryByPro.get(pro) || state.cavities.rows.find((r) => r.prod_order_no === pro) || null;
+  }
+
+  function ganttMinutes(pro, stage, qty) {
+    const row = rowForPro(pro);
+    const mins = row && row.minutes ? row.minutes[stage] : null;
+    return typeof mins === "number" ? (qty || 0) * mins : 0;
+  }
+
+  // Shift start as minutes from midnight, so a block's offset can be a clock time.
+  function shiftStartMinutes() {
+    const [h, m] = String(planning().shift_start || "07:00").split(":").map(Number);
+    return (h || 0) * 60 + (m || 0);
+  }
+
+  const clockAt = (minsFromStart) => {
+    const total = shiftStartMinutes() + minsFromStart;
+    return `${String(Math.floor(total / 60) % 24).padStart(2, "0")}:${String(Math.round(total % 60)).padStart(2, "0")}`;
+  };
+
+  // Is this job's previous step a problem? ⚠ when it isn't scheduled at all or
+  // sits after this one; ⏳ when it ran on an earlier day and isn't finished.
+  function predecessorFlag(pro, stage, dKey) {
+    const stages = (settingsLines()[lineForStage(stage)] || {}).stages || [];
+    const idx = stages.indexOf(stage);
+    if (idx <= 0) return null;
+    const prev = stages[idx - 1];
+    const entries = state.schedule.entries.filter((e) => e.prod_order_no === pro && e.stage === prev);
+    if (!entries.length) return { icon: "⚠", why: `${stageLabel(prev)} isn't scheduled at all`, prev };
+    const earliest = entries.map((e) => e.scheduled_date).sort()[0];
+    if (earliest > dKey) return { icon: "⚠", why: `${stageLabel(prev)} is scheduled after this (${fmtDate(earliest)})`, prev };
+    if (earliest < dKey) {
+      const row = rowForPro(pro);
+      const done = row ? row[`${prev}_done`] || 0 : 0;
+      const total = row ? row.total_qty || 0 : 0;
+      if (done < total) return { icon: "⏳", why: `${stageLabel(prev)} on ${fmtDate(earliest)} isn't finished (${fmtNum(done)} of ${fmtNum(total)})`, prev };
+    }
+    return { prev };
+  }
+
+  // Blocks for one area: sales orders end to end, in board order.
+  function ganttRow(stage, dKey) {
+    const entries = state.schedule.entries
+      .filter((e) => e.stage === stage && e.scheduled_date === dKey)
+      .sort((a, b) => (a.sequence - b.sequence) || String(a.sales_order_no).localeCompare(String(b.sales_order_no)));
+
+    const bySo = new Map();
+    for (const e of entries) {
+      const so = e.sales_order_no || "—";
+      if (!bySo.has(so)) bySo.set(so, { so, entries: [], minutes: 0, customer: e.source_name });
+      const b = bySo.get(so);
+      b.entries.push(e);
+      b.minutes += ganttMinutes(e.prod_order_no, stage, e.qty);
+    }
+
+    let at = 0;
+    const blocks = [...bySo.values()].map((b) => {
+      const start = at;
+      at += b.minutes;
+      let proAt = start;
+      const pros = b.entries.map((e) => {
+        const mins = ganttMinutes(e.prod_order_no, stage, e.qty);
+        const row = rowForPro(e.prod_order_no);
+        const bar = {
+          pro: e.prod_order_no, stage, start: proAt, minutes: mins, qty: e.qty,
+          done: row ? row[`${stage}_done`] || 0 : 0,
+          total: row ? row.total_qty || 0 : 0,
+          due: e.due_date, wm: row ? row.wm_number : null,
+          flag: predecessorFlag(e.prod_order_no, stage, dKey),
+        };
+        proAt += mins;
+        return bar;
+      });
+      return { ...b, start, pros };
+    });
+    return { stage, blocks, totalMinutes: at };
+  }
+
+  function renderGantt() {
+    const g = state.gantt;
+    const dKey = g.date;
+    if (!dKey) return;
+
+    $("#gantt-date").textContent = fmtDayDate(parseDateKey(dKey));
+    $("#gantt-zoom").value = String(g.tick);
+
+    const lineBtns = [...ganttLines().map(([id, l]) => [id, l.label]), ["all", "All schedules"]];
+    $("#gantt-lines").innerHTML = lineBtns.map(([id, label]) =>
+      `<button class="segmented-btn ${g.line === id ? "is-active" : ""}" type="button" data-gline="${id}">${escapeAttr(label)}</button>`).join("");
+    $$("#gantt-lines [data-gline]").forEach((b) => {
+      b.onclick = () => { g.line = b.dataset.gline; renderGantt(); };
+    });
+
+    const pxPerMin = 80 / g.tick;
+    const stages = ganttStages();
+    const rows = stages.map((s) => ({ ...s, ...ganttRow(s.stage, dKey) }));
+    const longest = Math.max(60, ...rows.map((r) => r.totalMinutes),
+      ...stages.map((s) => hoursAvailable(dKey, [s.stage]) * 60));
+    const spanMin = Math.ceil((longest + g.tick) / g.tick) * g.tick;
+    const plotW = spanMin * pxPerMin;
+
+    const ticks = [];
+    for (let m = 0; m <= spanMin; m += g.tick) {
+      ticks.push(`<div class="gantt-tick" style="left:${(m * pxPerMin).toFixed(1)}px"><span>${clockAt(m)}</span></div>`);
+    }
+
+    const rowsHtml = rows.map((r) => {
+      const areaOpen = g.openAreas.has(r.stage);
+      const shiftMin = hoursAvailable(dKey, [r.stage]) * 60;
+      const overtime = shiftMin < spanMin
+        ? `<div class="gantt-overtime" style="left:${(shiftMin * pxPerMin).toFixed(1)}px;width:${((spanMin - shiftMin) * pxPerMin).toFixed(1)}px"></div>`
+        : "";
+      const shiftEnd = shiftMin > 0
+        ? `<div class="gantt-shift-end" style="left:${(shiftMin * pxPerMin).toFixed(1)}px" title="End of shift — ${clockAt(shiftMin)}"></div>`
+        : "";
+
+      const blocks = r.blocks.map((b) => {
+        const open = areaOpen || g.openBlocks.has(`${r.stage}|${b.so}`);
+        const w = Math.max(MIN_BLOCK_PX, b.minutes * pxPerMin);
+        const late = b.pros.some((p) => p.flag && p.flag.icon);
+        return `<div class="gantt-block ${open ? "is-open" : ""} ${late ? "has-flag" : ""}"
+          style="left:${(b.start * pxPerMin).toFixed(1)}px;width:${w.toFixed(1)}px"
+          data-block="${escapeAttr(`${r.stage}|${b.so}`)}" data-so="${escapeAttr(b.so)}"
+          title="${escapeAttr(b.so)} · ${fmtNum(Math.round(b.minutes))} min · ${clockAt(b.start)}–${clockAt(b.start + b.minutes)}">
+          <span class="gantt-block-label">${escapeAttr(b.so)}</span></div>`;
+      }).join("");
+
+      const proBars = r.blocks.flatMap((b) => {
+        const open = areaOpen || g.openBlocks.has(`${r.stage}|${b.so}`);
+        if (!open) return [];
+        return b.pros.map((pbar) => {
+          const w = Math.max(MIN_BLOCK_PX, pbar.minutes * pxPerMin);
+          const pct = pbar.total ? Math.min(100, (pbar.done / pbar.total) * 100) : 0;
+          const flag = pbar.flag && pbar.flag.icon ? `<span class="gantt-flag" title="${escapeAttr(pbar.flag.why)}">${pbar.flag.icon}</span>` : "";
+          return `<div class="gantt-pro" style="left:${(pbar.start * pxPerMin).toFixed(1)}px;width:${w.toFixed(1)}px"
+            data-pro="${escapeAttr(pbar.pro)}" data-stage="${r.stage}"
+            data-tip="${escapeAttr([
+              `${pbar.pro} · ${r.label}`,
+              `${clockAt(pbar.start)}–${clockAt(pbar.start + pbar.minutes)} (${fmtNum(Math.round(pbar.minutes))} min)`,
+              `${fmtNum(pbar.done)} of ${fmtNum(pbar.total)} units done`,
+              pbar.due ? `Due ${fmtDate(pbar.due)}` : "No due date",
+              pbar.wm ? `WM ${pbar.wm}` : "No WM number",
+              pbar.flag && pbar.flag.why ? pbar.flag.why : "",
+            ].filter(Boolean).join("\n"))}">
+            <div class="gantt-pro-fill" style="width:${pct.toFixed(0)}%"></div>
+            <span class="gantt-pro-label">${escapeAttr(pbar.pro)}${flag}</span></div>`;
+        });
+      }).join("");
+
+      return `<div class="gantt-row" data-stage="${r.stage}">
+        <button class="gantt-area" type="button" data-area="${r.stage}" title="Open every sales order in this area">
+          <span class="settings-line-tag">${escapeAttr(r.lineId)}</span>${escapeAttr(r.label)}
+        </button>
+        <div class="gantt-track" style="width:${plotW.toFixed(1)}px">
+          ${overtime}${shiftEnd}${blocks}
+          ${proBars ? `<div class="gantt-pro-lane">${proBars}</div>` : ""}
+        </div>
+      </div>`;
+    }).join("");
+
+    $("#gantt-scroll").innerHTML =
+      `<div class="gantt-inner" style="--gantt-plot:${plotW.toFixed(1)}px">
+        <div class="gantt-row gantt-axis"><div class="gantt-area"></div>
+          <div class="gantt-track" style="width:${plotW.toFixed(1)}px">${ticks.join("")}</div></div>
+        ${rowsHtml || '<div class="empty-state">Nothing scheduled on this day.</div>'}
+      </div>`;
+
+    wireGanttBody();
+  }
+
+  function wireGanttBody() {
+    $$("#gantt-scroll [data-block]").forEach((el) => {
+      el.onclick = () => {
+        const key = el.dataset.block;
+        state.gantt.openBlocks.has(key) ? state.gantt.openBlocks.delete(key) : state.gantt.openBlocks.add(key);
+        renderGantt();
+      };
+    });
+    $$("#gantt-scroll [data-area]").forEach((el) => {
+      el.onclick = () => {
+        const st = el.dataset.area;
+        state.gantt.openAreas.has(st) ? state.gantt.openAreas.delete(st) : state.gantt.openAreas.add(st);
+        renderGantt();
+      };
+    });
+
+    const tip = $("#gantt-tip");
+    $$("#gantt-scroll .gantt-pro").forEach((el) => {
+      el.onmouseenter = () => {
+        // Light up this job's whole chain across the areas, not just this bar.
+        $$(`#gantt-scroll .gantt-pro[data-pro="${CSS.escape(el.dataset.pro)}"]`).forEach((p) => p.classList.add("is-chain"));
+        tip.textContent = el.dataset.tip;
+        tip.hidden = false;
+      };
+      el.onmousemove = (ev) => {
+        tip.style.left = `${Math.min(ev.clientX + 14, window.innerWidth - tip.offsetWidth - 10)}px`;
+        tip.style.top = `${ev.clientY + 16}px`;
+      };
+      el.onmouseleave = () => {
+        $$("#gantt-scroll .gantt-pro.is-chain").forEach((p) => p.classList.remove("is-chain"));
+        tip.hidden = true;
+      };
+      el.onclick = (ev) => { ev.stopPropagation(); openUnitTracker(el.dataset.pro); };
+    });
+  }
+
+  function wireUnitTracker() {
+    $("#tracker-close").onclick = closeUnitTracker;
+    $("#trackerBackdrop").addEventListener("click", (e) => {
+      if (e.target.id === "trackerBackdrop") closeUnitTracker();
+    });
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && !$("#trackerBackdrop").hidden) closeUnitTracker();
+    });
+  }
+
+  function openGantt(dKey) {
+    state.gantt.date = dKey;
+    $("#ganttOverlay").hidden = false;
+    document.body.classList.add("is-gantt-open");
+    renderGantt();
+  }
+
+  function closeGantt() {
+    $("#ganttOverlay").hidden = true;
+    document.body.classList.remove("is-gantt-open");
+  }
+
+  function wireGantt() {
+    $("#gantt-close").onclick = closeGantt;
+    $("#gantt-prev").onclick = () => { state.gantt.date = dateKey(addBusinessDays(parseDateKey(state.gantt.date), -1)); renderGantt(); };
+    $("#gantt-next").onclick = () => { state.gantt.date = dateKey(addBusinessDays(parseDateKey(state.gantt.date), 1)); renderGantt(); };
+    $("#gantt-zoom").onchange = (e) => { state.gantt.tick = Number(e.target.value); renderGantt(); };
+    $("#gantt-openall").onclick = () => {
+      const stages = ganttStages().map((s) => s.stage);
+      const allOpen = stages.every((s) => state.gantt.openAreas.has(s));
+      state.gantt.openAreas = allOpen ? new Set() : new Set(stages);
+      renderGantt();
+    };
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && !$("#ganttOverlay").hidden) closeGantt();
+    });
   }
 
   // ---------- efficiency ----------
@@ -6213,6 +6589,8 @@
   wireScheduleNav();
   wireHoldingSearch("#schedule-holding-search", "schedule", renderScheduling);
   wireHuddle();
+  wireGantt();
+  wireUnitTracker();
   wireCavities();
   wireFactoryDayNav();
   wireFactoryReset();

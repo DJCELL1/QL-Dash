@@ -422,6 +422,42 @@ PRO-330659: L2.02, L2.02, L2.03, L2.03</pre>
   Read only — <button type="button" class="link-btn" id="bannerSignIn">sign in</button> to make changes.
 </div>
 
+<div class="signin-backdrop tracker-backdrop" id="trackerBackdrop" hidden>
+  <div class="tracker-card">
+    <div class="tracker-head">
+      <div>
+        <h2 id="tracker-title"></h2>
+        <div class="cell-muted" id="tracker-sub"></div>
+      </div>
+      <span class="gantt-spacer"></span>
+      <button class="btn" type="button" id="tracker-close">Close</button>
+    </div>
+    <div id="tracker-body"></div>
+  </div>
+</div>
+
+<div class="gantt-overlay" id="ganttOverlay" hidden>
+  <div class="gantt-bar">
+    <button class="btn" type="button" id="gantt-prev">&lsaquo;</button>
+    <span class="gantt-date" id="gantt-date"></span>
+    <button class="btn" type="button" id="gantt-next">&rsaquo;</button>
+    <div class="segmented" id="gantt-lines"></div>
+    <label class="capacity-label">Zoom
+      <select id="gantt-zoom">
+        <option value="120">Whole day</option>
+        <option value="60">1 hour</option>
+        <option value="30" selected>30 minutes</option>
+        <option value="15">15 minutes</option>
+      </select>
+    </label>
+    <button class="btn" type="button" id="gantt-openall">Open all</button>
+    <span class="gantt-spacer"></span>
+    <button class="btn" type="button" id="gantt-close">Close</button>
+  </div>
+  <div class="gantt-scroll" id="gantt-scroll"></div>
+  <div class="gantt-tip" id="gantt-tip" hidden></div>
+</div>
+
 <div class="signin-backdrop" id="signinBackdrop" hidden>
   <form class="signin-card" id="signinForm">
     <h2>Sign in</h2>
