@@ -111,6 +111,16 @@ CREATE TABLE IF NOT EXISTS progress_events (
 CREATE INDEX IF NOT EXISTS idx_progress_events_at ON progress_events (at);
 CREATE INDEX IF NOT EXISTS idx_progress_events_pro ON progress_events (prod_order_no, stage, id);
 
+-- Hours actually worked at a step on a day, typed in on the Efficiency tab.
+-- Absent means nobody has said, and the hours available stand in.
+CREATE TABLE IF NOT EXISTS actual_hours (
+    the_date TEXT NOT NULL,
+    stage TEXT NOT NULL,
+    hours REAL NOT NULL,
+    updated_at TEXT NOT NULL DEFAULT '',
+    PRIMARY KEY (the_date, stage)
+);
+
 CREATE TABLE IF NOT EXISTS work_hours (
     stage TEXT NOT NULL,
     weekday INTEGER NOT NULL,          -- 0 = Monday ... 6 = Sunday
@@ -1023,6 +1033,36 @@ def set_sub_status(prod_order_no: str, work_centre_no: str, **fields) -> dict:
 
 
 # ---------- users and settings ----------
+
+
+def get_actual_hours(date_from: str | None = None, date_to: str | None = None) -> dict[tuple[str, str], float]:
+    sql, args = "SELECT the_date, stage, hours FROM actual_hours", []
+    where = []
+    if date_from:
+        where.append("the_date >= ?")
+        args.append(date_from)
+    if date_to:
+        where.append("the_date <= ?")
+        args.append(date_to)
+    if where:
+        sql += " WHERE " + " AND ".join(where)
+    with get_conn() as conn:
+        return {(r["the_date"], r["stage"]): r["hours"] for r in conn.execute(sql, args)}
+
+
+def set_actual_hours(the_date: str, stage: str, hours: float | None) -> None:
+    """A blank clears the row, so the hours available stand in again."""
+    from datetime import datetime, timezone
+
+    with get_conn() as conn:
+        if hours is None:
+            conn.execute("DELETE FROM actual_hours WHERE the_date = ? AND stage = ?", (the_date, stage))
+            return
+        conn.execute(
+            "INSERT INTO actual_hours (the_date, stage, hours, updated_at) VALUES (?, ?, ?, ?) "
+            "ON CONFLICT(the_date, stage) DO UPDATE SET hours = excluded.hours, updated_at = excluded.updated_at",
+            (the_date, stage, float(hours), datetime.now(timezone.utc).isoformat()),
+        )
 
 
 def get_work_hours() -> dict[str, dict[int, float]]:

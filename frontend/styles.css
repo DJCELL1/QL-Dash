@@ -2071,3 +2071,60 @@ button.who:hover { background: var(--baseline); color: var(--text-primary); }
   background: var(--card-shortage-bg);
   border-color: var(--card-shortage-line);
 }
+
+/* ---------- efficiency ---------- */
+
+/* The spec's bands: 95 and above green, 80 to 95 amber, below red. */
+.eff-good { color: var(--success-text); font-weight: 700; }
+.eff-warn { color: #9a6b00; font-weight: 700; }
+.eff-bad  { color: var(--status-critical); font-weight: 700; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .eff-warn { color: var(--status-warning); }
+}
+:root[data-theme="dark"] .eff-warn { color: var(--status-warning); }
+
+.chart-svg { width: 100%; height: auto; display: block; }
+
+.svg-bar-planned { fill: var(--baseline); }
+.svg-bar-earned  { fill: var(--series-1); }
+.svg-bar-actual  { fill: var(--series-2); }
+
+/* The 100% line the areas are read against. */
+.svg-target { stroke: var(--status-good); stroke-width: 1; stroke-dasharray: 4 3; }
+
+.svg-line.series-0, .svg-dot.series-0 { stroke: #637a90; fill: none; }
+.svg-line.series-1, .svg-dot.series-1 { stroke: #424f59; fill: none; }
+.svg-line.series-2, .svg-dot.series-2 { stroke: #8ea1b4; fill: none; }
+.svg-line.series-3, .svg-dot.series-3 { stroke: #b7c2cb; fill: none; }
+.svg-line.series-4, .svg-dot.series-4 { stroke: #565855; fill: none; }
+.svg-dot.series-0 { fill: #637a90; }
+.svg-dot.series-1 { fill: #424f59; }
+.svg-dot.series-2 { fill: #8ea1b4; }
+.svg-dot.series-3 { fill: #b7c2cb; }
+.svg-dot.series-4 { fill: #565855; }
+
+.chart-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 8px; }
+.legend-key {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+.legend-key::before { content: ""; width: 11px; height: 11px; border-radius: 2px; background: var(--baseline); }
+.legend-earned::before  { background: var(--series-1); }
+.legend-actual::before  { background: var(--series-2); }
+.legend-series.series-0::before { background: #637a90; }
+.legend-series.series-1::before { background: #424f59; }
+.legend-series.series-2::before { background: #8ea1b4; }
+.legend-series.series-3::before { background: #b7c2cb; }
+.legend-series.series-4::before { background: #565855; }
+
+/* An actual figure nobody has typed is the hours available standing in, so it
+   reads quieter than one somebody has entered. */
+.eff-actual { width: 74px; }
+.eff-actual.is-default { color: var(--text-muted); font-style: italic; }
+
+.eff-pros td { background: var(--gridline); }
+.eff-pro-list { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 12px; color: var(--text-secondary); }

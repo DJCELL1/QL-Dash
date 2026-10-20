@@ -42,7 +42,10 @@ from db import (
     delete_day_override,
     get_day_overrides,
     get_product_minutes,
+    get_actual_hours,
+    get_all_schedule_entries,
     get_progress_events,
+    set_actual_hours,
     get_work_hours,
     latest_snapshot,
     set_day_override,
@@ -2089,6 +2092,156 @@ def api_set_planning(request: Request, body: PlanningIn):
     set_setting("planning", json.dumps(merged))
     write_audit(actor(request), "settings.planning", ", ".join(sorted(body.values)))
     return merged
+
+
+# ---------- efficiency ----------
+
+
+def hours_available_on(the_date: str, stage: str, hours: dict, overrides: dict) -> float:
+    """What a step was given on a date. Same precedence as the board."""
+    if (the_date, stage) in overrides:
+        return overrides[(the_date, stage)]
+    if (the_date, "") in overrides:
+        return overrides[(the_date, "")]
+    weekday = date.fromisoformat(the_date).weekday()
+    return (hours.get(stage) or {}).get(weekday, 0.0)
+
+
+def pro_minutes_map() -> dict[str, dict[str, float]]:
+    """Minutes per unit for every job in the current exports, by PRO."""
+    lookup = minutes_lookup()
+    out: dict[str, dict[str, float]] = {}
+    for line in LINES.values():
+        _, grouped = _pro_totals(line["dataset"])
+        for pro, g in grouped.items():
+            out[pro] = _minutes_for(g, line["stages"], lookup)
+    return out
+
+
+def _stage_line(stage: str) -> str:
+    for line_id, line in LINES.items():
+        if stage in line["stages"]:
+            return line_id
+    return ""
+
+
+@app.get("/api/efficiency")
+def api_efficiency(date_from: str, date_to: str):
+    """Planned, earned and actual hours per step per day.
+
+    Planned is the work sitting on that day. Earned is the estimated time of
+    whatever was ticked off that day, which is why the tick log exists. Actual
+    is typed in, and falls back to the hours the day was given.
+    """
+    try:
+        date.fromisoformat(date_from), date.fromisoformat(date_to)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Dates must be YYYY-MM-DD.")
+    if date_to < date_from:
+        raise HTTPException(status_code=400, detail="The end date is before the start date.")
+
+    minutes = pro_minutes_map()
+    default_minutes = get_product_minutes().get(DEFAULT_GROUP, {})
+
+    def mins_for(pro: str, stage: str):
+        value = (minutes.get(pro) or {}).get(stage)
+        return value if value is not None else default_minutes.get(stage)
+
+    cells: dict[tuple[str, str], dict] = {}
+
+    def cell(the_date: str, stage: str) -> dict:
+        return cells.setdefault((the_date, stage), {
+            "date": the_date, "stage": stage, "line": _stage_line(stage),
+            "planned_hours": 0.0, "earned_hours": 0.0, "units": 0.0, "pros": {},
+        })
+
+    # planned — what the board has on that day
+    for e in get_all_schedule_entries():
+        the_date = e["scheduled_date"]
+        if the_date == HOLDING_DATE or not (date_from <= the_date <= date_to):
+            continue
+        m = mins_for(e["prod_order_no"], e["stage"])
+        if m:
+            cell(the_date, e["stage"])["planned_hours"] += (e["qty"] or 0) * m / 60
+
+    # earned — the estimated time of what was ticked that day
+    for ev in get_progress_events(date_from, date_to):
+        if ev["delta"] <= 0:
+            continue
+        the_date = ev["at"][:10]
+        if not (date_from <= the_date <= date_to):
+            continue
+        c = cell(the_date, ev["stage"])
+        m = mins_for(ev["prod_order_no"], ev["stage"])
+        hours = (ev["delta"] * m / 60) if m else 0.0
+        c["earned_hours"] += hours
+        c["units"] += ev["delta"]
+        pro = c["pros"].setdefault(ev["prod_order_no"], {"prod_order_no": ev["prod_order_no"], "units": 0.0, "hours": 0.0})
+        pro["units"] += ev["delta"]
+        pro["hours"] += hours
+
+    work_hours = {st: {int(k): v for k, v in wk.items()} for st, wk in get_work_hours().items()}
+    overrides = {(o["the_date"], o["stage"]): o["hours"] for o in get_day_overrides()}
+    actual = get_actual_hours(date_from, date_to)
+
+    rows = []
+    for (the_date, stage), c in sorted(cells.items()):
+        available = hours_available_on(the_date, stage, work_hours, overrides)
+        typed = actual.get((the_date, stage))
+        actual_hours = typed if typed is not None else available
+        earned = round(c["earned_hours"], 2)
+        planned = round(c["planned_hours"], 2)
+        rows.append({
+            **{k: c[k] for k in ("date", "stage", "line")},
+            "label": _stage_label(stage),
+            "planned_hours": planned,
+            "earned_hours": earned,
+            "actual_hours": round(actual_hours, 2),
+            "available_hours": round(available, 2),
+            "actual_is_default": typed is None,
+            "units": round(c["units"], 2),
+            "efficiency": round(earned / actual_hours * 100, 1) if actual_hours else None,
+            "attainment": round(earned / planned * 100, 1) if planned else None,
+            "pros": sorted(
+                ({**v, "units": round(v["units"], 2), "hours": round(v["hours"], 2)} for v in c["pros"].values()),
+                key=lambda x: -x["hours"],
+            ),
+        })
+
+    earned_total = round(sum(r["earned_hours"] for r in rows), 2)
+    planned_total = round(sum(r["planned_hours"] for r in rows), 2)
+    actual_total = round(sum(r["actual_hours"] for r in rows), 2)
+    return {
+        "date_from": date_from,
+        "date_to": date_to,
+        "rows": rows,
+        "totals": {
+            "planned_hours": planned_total,
+            "earned_hours": earned_total,
+            "actual_hours": actual_total,
+            "efficiency": round(earned_total / actual_total * 100, 1) if actual_total else None,
+            "attainment": round(earned_total / planned_total * 100, 1) if planned_total else None,
+        },
+    }
+
+
+class ActualHoursIn(BaseModel):
+    the_date: str
+    stage: str
+    hours: float | None = None
+
+
+@app.post("/api/efficiency/actual")
+def api_set_actual_hours(request: Request, body: ActualHoursIn):
+    require_admin(request, "record actual hours")
+    if body.stage not in ALL_STAGES:
+        raise HTTPException(status_code=400, detail=f"Unknown step '{body.stage}'.")
+    if body.hours is not None and body.hours < 0:
+        raise HTTPException(status_code=400, detail="Hours can't be negative.")
+    set_actual_hours(body.the_date, body.stage, body.hours)
+    write_audit(actor(request), "efficiency.actual",
+                f"{body.the_date} {body.stage} -> {'cleared' if body.hours is None else body.hours}")
+    return {"saved": True}
 
 
 app.mount("/", StaticFiles(directory=str(FRONTEND_DIR), html=True), name="frontend")

@@ -25,6 +25,7 @@
         <button class="tab-btn" data-view="scheduling">Door schedule</button>
         <button class="tab-btn" data-view="cavities">Cavities schedule</button>
         <button class="tab-btn" data-view="labels">Labels</button>
+        <button class="tab-btn" data-view="efficiency">Efficiency</button>
         <button class="tab-btn" data-view="settings">Settings</button>
       </nav>
     </div>
@@ -328,6 +329,37 @@ PRO-330659: L2.02, L2.02, L2.03, L2.03</pre>
         <div class="schedule-board" id="cavities-board"></div>
       </div>
       <div class="empty-state" id="cavities-empty" hidden></div>
+    </section>
+
+    <section class="view" id="view-efficiency" hidden>
+
+      <div class="chart-card">
+        <h2>EFFICIENCY.</h2>
+        <p class="leveling-note">Earned hours are the estimated time of whatever was ticked off that day. Actual hours default to what the day was given &mdash; type over them with what was really worked. Efficiency is earned &divide; actual; plan attainment is earned &divide; planned.</p>
+        <div class="settings-row">
+          <label class="capacity-label">From <input type="date" class="num-input" id="eff-from"></label>
+          <label class="capacity-label">To <input type="date" class="num-input" id="eff-to"></label>
+          <button class="btn" id="eff-apply">Show</button>
+          <button class="btn" id="eff-csv">Download CSV</button>
+        </div>
+        <div class="stat-row" id="eff-stats"></div>
+      </div>
+
+      <div class="chart-card">
+        <h2>HOURS BY DAY.</h2>
+        <div id="eff-hours-chart" class="chart-body"></div>
+      </div>
+
+      <div class="chart-card">
+        <h2>EFFICIENCY BY AREA.</h2>
+        <div id="eff-trend-chart" class="chart-body"></div>
+      </div>
+
+      <div class="chart-card">
+        <h2>DAILY DETAIL.</h2>
+        <div class="table-wrap"><table class="data-table" id="eff-table"><thead></thead><tbody></tbody></table></div>
+      </div>
+
     </section>
 
     <section class="view" id="view-settings" hidden>

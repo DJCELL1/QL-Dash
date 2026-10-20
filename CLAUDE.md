@@ -178,6 +178,27 @@ job up.
 BC sends dates as `2026-10-16 00:00:00`. `parseDateKey()` cannot read that and
 returns an Invalid Date, so compare ISO prefixes with `.slice(0, 10)` instead.
 
+## Efficiency
+
+`/api/efficiency?date_from&date_to` returns one row per step per day:
+
+- **planned** - work sitting on that day in `schedule_entries`, priced with the
+  same minutes lookup the boards use.
+- **earned** - positive deltas from `progress_events` that day, priced the same
+  way. This is the whole reason the tick log exists.
+- **actual** - typed in and stored in `actual_hours`; absent, it falls back to
+  the hours the day was given, and the row says `actual_is_default` so the UI
+  can show it as a stand-in. Clearing the box restores the fallback.
+
+Efficiency is earned / actual, plan attainment earned / planned. Bands are 95+
+green, 80-95 amber, below red.
+
+Attainment above 100% is normal - it means work was ticked off that nobody had
+scheduled. Attainment is null when nothing was planned, rather than infinite.
+
+A PRO that has left the exports has no product group, so it falls back to the
+`__default__` minutes row; without one it earns nothing and the day under-reads.
+
 ## Auth
 
 Signed cookie `prodash_session`, 30 days. Reading is open to anyone with the

@@ -15,6 +15,9 @@
     subLaneExpanded: new Set(), // "<contractor>|<lane>" shown in full
     cavities: { rows: [], as_of: null, search: "", windowStart: null },
     settings: null,
+    efficiency: null,
+    effRange: null,
+    effOpenRows: new Set(),
     settingsLine: "doors",
     settingsFilter: "",
     powdercoat: { rows: [], as_of: null },
@@ -4044,6 +4047,238 @@
     return { hours, unpriced };
   }
 
+  // ---------- efficiency ----------
+
+  // The spec's thresholds: at or above 95 is green, 80 to 95 amber, below red.
+  function effClass(pct) {
+    if (pct == null) return "";
+    if (pct >= 95) return "eff-good";
+    if (pct >= 80) return "eff-warn";
+    return "eff-bad";
+  }
+
+  const effPct = (v) => (v == null ? "—" : `${fmtNum(Math.round(v))}%`);
+
+  function defaultEffRange() {
+    const to = new Date();
+    const from = new Date();
+    from.setDate(from.getDate() - 13);
+    return { from: dateKey(from), to: dateKey(to) };
+  }
+
+  async function loadEfficiency() {
+    const r = state.effRange || (state.effRange = defaultEffRange());
+    try {
+      state.efficiency = await fetchJSON(`/api/efficiency?date_from=${r.from}&date_to=${r.to}`);
+    } catch (e) {
+      state.efficiency = null;
+      notifyError(e, "Couldn't load efficiency.");
+    }
+  }
+
+  function renderEffStats(totals) {
+    const tiles = [
+      ["Planned hours", fmtNum(Math.round(totals.planned_hours * 10) / 10), ""],
+      ["Earned hours", fmtNum(Math.round(totals.earned_hours * 10) / 10), ""],
+      ["Actual hours", fmtNum(Math.round(totals.actual_hours * 10) / 10), ""],
+      ["Efficiency", effPct(totals.efficiency), effClass(totals.efficiency)],
+      ["Plan attainment", effPct(totals.attainment), effClass(totals.attainment)],
+    ];
+    $("#eff-stats").innerHTML = tiles.map(([label, value, cls]) =>
+      `<div class="stat-tile"><div class="stat-label">${label}</div><div class="stat-value ${cls}">${value}</div></div>`
+    ).join("");
+  }
+
+  // Planned, earned and actual side by side for each day in the range.
+  function renderEffHoursChart(rows) {
+    const el = $("#eff-hours-chart");
+    const days = [...new Set(rows.map((r) => r.date))].sort();
+    if (!days.length) {
+      el.innerHTML = '<div class="chart-empty">Nothing recorded in this range.</div>';
+      return;
+    }
+    const by = new Map(days.map((d) => [d, { planned: 0, earned: 0, actual: 0 }]));
+    for (const r of rows) {
+      const b = by.get(r.date);
+      b.planned += r.planned_hours;
+      b.earned += r.earned_hours;
+      b.actual += r.actual_hours;
+    }
+    const w = 900, h = 240, padL = 40, padR = 16, padT = 16, padB = 34;
+    const plotW = w - padL - padR, plotH = h - padT - padB;
+    const maxV = Math.max(1, ...[...by.values()].flatMap((b) => [b.planned, b.earned, b.actual]));
+    const slot = plotW / days.length;
+    const barW = Math.max(2, Math.min(14, slot / 4));
+
+    const series = [["planned", "svg-bar-planned"], ["earned", "svg-bar-earned"], ["actual", "svg-bar-actual"]];
+    const bars = days.flatMap((day, i) => {
+      const b = by.get(day);
+      return series.map(([key, cls], s) => {
+        const value = b[key];
+        const bh = (value / maxV) * plotH;
+        const x = padL + slot * i + slot / 2 + (s - 1) * (barW + 1) - barW / 2;
+        return `<rect class="${cls}" x="${x.toFixed(1)}" y="${(padT + plotH - bh).toFixed(1)}"
+          width="${barW.toFixed(1)}" height="${Math.max(0, bh).toFixed(1)}"><title>${day} ${key}: ${fmtNum(Math.round(value * 10) / 10)}h</title></rect>`;
+      });
+    });
+    const grid = [0, 0.25, 0.5, 0.75, 1].map((f) => {
+      const yy = padT + plotH * (1 - f);
+      return `<line class="svg-grid" x1="${padL}" y1="${yy.toFixed(1)}" x2="${w - padR}" y2="${yy.toFixed(1)}"></line>` +
+             `<text class="svg-label" x="4" y="${(yy + 3).toFixed(1)}">${fmtNum(Math.round(maxV * f))}</text>`;
+    });
+    const every = Math.ceil(days.length / 8) || 1;
+    const xLabels = days.map((day, i) => i % every === 0
+      ? `<text class="svg-label" text-anchor="middle" x="${(padL + slot * i + slot / 2).toFixed(1)}" y="${h - 12}">${day.slice(5)}</text>` : "").join("");
+
+    el.innerHTML = `<svg viewBox="0 0 ${w} ${h}" class="chart-svg" role="img" aria-label="Planned, earned and actual hours by day">
+      ${grid.join("")}${bars.join("")}
+      <line class="svg-axis" x1="${padL}" y1="${padT + plotH}" x2="${w - padR}" y2="${padT + plotH}"></line>
+      ${xLabels}
+    </svg>
+    <div class="chart-legend">
+      <span class="legend-key legend-planned">Planned</span>
+      <span class="legend-key legend-earned">Earned</span>
+      <span class="legend-key legend-actual">Actual</span>
+    </div>`;
+  }
+
+  // One line per area, against the 100% target the spec asks for.
+  function renderEffTrendChart(rows) {
+    const el = $("#eff-trend-chart");
+    const days = [...new Set(rows.map((r) => r.date))].sort();
+    const areas = [...new Set(rows.map((r) => r.stage))];
+    if (!days.length || !areas.length) {
+      el.innerHTML = '<div class="chart-empty">Nothing recorded in this range.</div>';
+      return;
+    }
+    const value = new Map(rows.map((r) => [`${r.date}|${r.stage}`, r.efficiency]));
+    const w = 900, h = 240, padL = 40, padR = 16, padT = 16, padB = 34;
+    const plotW = w - padL - padR, plotH = h - padT - padB;
+    const maxV = Math.max(120, ...rows.map((r) => r.efficiency || 0));
+    const x = (i) => padL + (days.length === 1 ? plotW / 2 : (i / (days.length - 1)) * plotW);
+    const y = (v) => padT + plotH - (v / maxV) * plotH;
+
+    const lines = areas.map((area, idx) => {
+      const pts = days.map((day, i) => [i, value.get(`${day}|${area}`)]).filter(([, v]) => v != null);
+      if (!pts.length) return "";
+      const path = pts.map(([i, v], k) => `${k === 0 ? "M" : "L"} ${x(i).toFixed(1)} ${y(v).toFixed(1)}`).join(" ");
+      const dots = pts.map(([i, v]) => `<circle class="svg-dot series-${idx % 5}" cx="${x(i).toFixed(1)}" cy="${y(v).toFixed(1)}" r="2.5"><title>${stageLabel(area)} ${days[i]}: ${effPct(v)}</title></circle>`).join("");
+      return `<path class="svg-line series-${idx % 5}" d="${path}"></path>${dots}`;
+    });
+
+    const target = y(100);
+    const grid = [0, 0.5, 1].map((f) => {
+      const yy = padT + plotH * (1 - f);
+      return `<line class="svg-grid" x1="${padL}" y1="${yy.toFixed(1)}" x2="${w - padR}" y2="${yy.toFixed(1)}"></line>` +
+             `<text class="svg-label" x="4" y="${(yy + 3).toFixed(1)}">${Math.round(maxV * f)}%</text>`;
+    });
+    const every = Math.ceil(days.length / 8) || 1;
+    const xLabels = days.map((day, i) => i % every === 0
+      ? `<text class="svg-label" text-anchor="middle" x="${x(i).toFixed(1)}" y="${h - 12}">${day.slice(5)}</text>` : "").join("");
+
+    el.innerHTML = `<svg viewBox="0 0 ${w} ${h}" class="chart-svg" role="img" aria-label="Efficiency by area against a 100% target">
+      ${grid.join("")}
+      <line class="svg-target" x1="${padL}" y1="${target.toFixed(1)}" x2="${w - padR}" y2="${target.toFixed(1)}"></line>
+      <text class="svg-label" x="${w - padR - 26}" y="${(target - 5).toFixed(1)}">100%</text>
+      ${lines.join("")}
+      <line class="svg-axis" x1="${padL}" y1="${padT + plotH}" x2="${w - padR}" y2="${padT + plotH}"></line>
+      ${xLabels}
+    </svg>
+    <div class="chart-legend">${areas.map((a, i) =>
+      `<span class="legend-key legend-series series-${i % 5}">${escapeAttr(stageLabel(a))}</span>`).join("")}</div>`;
+  }
+
+  function renderEffTable(rows) {
+    const table = $("#eff-table");
+    table.querySelector("thead").innerHTML =
+      "<tr><th>Date</th><th>Area</th><th>Planned</th><th>Earned</th><th>Actual</th><th>Efficiency</th><th>Attainment</th><th>Units</th><th></th></tr>";
+    table.querySelector("tbody").innerHTML = rows.length
+      ? rows.map((r) => {
+          const key = `${r.date}|${r.stage}`;
+          const open = state.effOpenRows.has(key);
+          const pros = open && r.pros.length
+            ? `<tr class="eff-pros"><td colspan="9"><div class="eff-pro-list">${r.pros.map((p) =>
+                `<span><b>${escapeAttr(p.prod_order_no)}</b> ${fmtNum(p.units)}u · ${fmtNum(Math.round(p.hours * 100) / 100)}h</span>`).join("")}</div></td></tr>`
+            : "";
+          return `<tr>
+            <td>${fmtDate(r.date)}</td>
+            <td><span class="settings-line-tag">${escapeAttr(r.line)}</span> ${escapeAttr(r.label)}</td>
+            <td>${fmtNum(Math.round(r.planned_hours * 10) / 10)}h</td>
+            <td>${fmtNum(Math.round(r.earned_hours * 10) / 10)}h</td>
+            <td><input type="number" class="num-input eff-actual ${r.actual_is_default ? "is-default" : ""}" min="0" step="0.5"
+                 data-date="${r.date}" data-stage="${r.stage}" value="${r.actual_hours}"
+                 title="${r.actual_is_default ? "Defaulting to the hours this day was given" : "Typed in"}"></td>
+            <td class="${effClass(r.efficiency)}">${effPct(r.efficiency)}</td>
+            <td class="${effClass(r.attainment)}">${effPct(r.attainment)}</td>
+            <td>${fmtNum(r.units)}</td>
+            <td>${r.pros.length ? `<button class="link-btn" type="button" data-pros="${key}">${open ? "Hide" : "Show"} PROs</button>` : ""}</td>
+          </tr>${pros}`;
+        }).join("")
+      : '<tr><td colspan="9" class="cell-muted">Nothing recorded in this range.</td></tr>';
+
+    $$("#eff-table [data-pros]").forEach((btn) => {
+      btn.onclick = () => {
+        const key = btn.dataset.pros;
+        state.effOpenRows.has(key) ? state.effOpenRows.delete(key) : state.effOpenRows.add(key);
+        renderEffTable(rows);
+      };
+    });
+    $$("#eff-table .eff-actual").forEach((input) => {
+      input.onchange = async () => {
+        const raw = input.value.trim();
+        try {
+          await postJSON("/api/efficiency/actual", {
+            the_date: input.dataset.date, stage: input.dataset.stage,
+            hours: raw === "" ? null : Number(raw),
+          });
+          await loadEfficiency();
+          renderEfficiency();
+        } catch (e) {
+          notifyError(e, "Couldn't save those hours.");
+        }
+      };
+    });
+  }
+
+  function effCsv(rows) {
+    const head = ["Date", "Line", "Area", "Planned hours", "Earned hours", "Actual hours", "Efficiency %", "Attainment %", "Units"];
+    const body = rows.map((r) => [r.date, r.line, r.label, r.planned_hours, r.earned_hours,
+      r.actual_hours, r.efficiency ?? "", r.attainment ?? "", r.units]);
+    const csv = [head, ...body]
+      .map((cells) => cells.map((c) => (/[",\n]/.test(String(c)) ? `"${String(c).replace(/"/g, '""')}"` : c)).join(","))
+      .join("\r\n");
+    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `efficiency-${state.effRange.from}-to-${state.effRange.to}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function renderEfficiency() {
+    if (!state.effRange) state.effRange = defaultEffRange();
+    $("#eff-from").value = state.effRange.from;
+    $("#eff-to").value = state.effRange.to;
+
+    $("#eff-apply").onclick = async () => {
+      state.effRange = { from: $("#eff-from").value, to: $("#eff-to").value };
+      await loadEfficiency();
+      renderEfficiency();
+    };
+
+    if (!state.efficiency) {
+      loadEfficiency().then(() => state.efficiency && renderEfficiency());
+      return;
+    }
+    const rows = state.efficiency.rows || [];
+    $("#eff-csv").onclick = () => effCsv(rows);
+
+    renderEffStats(state.efficiency.totals || {});
+    renderEffHoursChart(rows);
+    renderEffTrendChart(rows);
+    renderEffTable(rows);
+  }
+
   // ---------- settings ----------
 
   const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -4311,6 +4546,7 @@
     else if (state.view === "cavities") renderCavities();
     else if (state.view === "labels") renderLabels();
     else if (state.view === "settings") renderSettings();
+    else if (state.view === "efficiency") renderEfficiency();
     else renderScheduling();
   }
 
@@ -5160,6 +5396,7 @@
         $("#view-cavities").hidden = state.view !== "cavities";
         $("#view-labels").hidden = state.view !== "labels";
         $("#view-settings").hidden = state.view !== "settings";
+        $("#view-efficiency").hidden = state.view !== "efficiency";
         render();
       });
     });
