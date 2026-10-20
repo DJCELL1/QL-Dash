@@ -93,6 +93,24 @@ CREATE TABLE IF NOT EXISTS processed_files (
     error TEXT
 );
 
+-- Every change to a step's progress, append-only. stage_progress stays the
+-- single source of truth for how much is done; this says when it happened and
+-- who did it, which is what Efficiency earns hours from and what gives each
+-- unit on the tracker a time.
+CREATE TABLE IF NOT EXISTS progress_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    prod_order_no TEXT NOT NULL,
+    stage TEXT NOT NULL,
+    from_qty REAL NOT NULL,
+    to_qty REAL NOT NULL,
+    delta REAL NOT NULL,
+    at TEXT NOT NULL,
+    by_user TEXT NOT NULL DEFAULT ''
+);
+
+CREATE INDEX IF NOT EXISTS idx_progress_events_at ON progress_events (at);
+CREATE INDEX IF NOT EXISTS idx_progress_events_pro ON progress_events (prod_order_no, stage, id);
+
 CREATE TABLE IF NOT EXISTS work_hours (
     stage TEXT NOT NULL,
     weekday INTEGER NOT NULL,          -- 0 = Monday ... 6 = Sunday
@@ -569,7 +587,7 @@ def get_stage_progress(prod_order_no: str) -> sqlite3.Row | None:
         return cur.fetchone()
 
 
-def set_stage_progress(prod_order_no: str, stage: str, done_qty: float) -> dict:
+def set_stage_progress(prod_order_no: str, stage: str, done_qty: float, by_user: str = "") -> dict:
     from datetime import datetime, timezone
 
     if stage not in STAGE_COLUMNS:
@@ -578,6 +596,18 @@ def set_stage_progress(prod_order_no: str, stage: str, done_qty: float) -> dict:
     now = datetime.now(timezone.utc).isoformat()
 
     with get_conn() as conn:
+        # What it was, so the event carries the movement rather than just the
+        # new total — a day earns the hours for what was done that day.
+        prior = conn.execute(
+            f"SELECT {column} AS was FROM stage_progress WHERE prod_order_no = ?", (prod_order_no,)
+        ).fetchone()
+        was = (prior["was"] if prior else 0) or 0
+        if done_qty != was:
+            conn.execute(
+                "INSERT INTO progress_events (prod_order_no, stage, from_qty, to_qty, delta, at, by_user) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (prod_order_no, stage, was, done_qty, done_qty - was, now, by_user),
+            )
         conn.execute(
             f"INSERT INTO stage_progress (prod_order_no, {column}, updated_at) VALUES (?, ?, ?) "
             f"ON CONFLICT(prod_order_no) DO UPDATE SET {column} = excluded.{column}, updated_at = excluded.updated_at",
@@ -585,6 +615,27 @@ def set_stage_progress(prod_order_no: str, stage: str, done_qty: float) -> dict:
         )
         cur = conn.execute("SELECT * FROM stage_progress WHERE prod_order_no = ?", (prod_order_no,))
         return dict(cur.fetchone())
+
+
+def get_progress_events(date_from: str | None = None, date_to: str | None = None,
+                        prod_order_no: str | None = None) -> list[dict]:
+    """Movements in a date range, oldest first. Dates are YYYY-MM-DD, inclusive."""
+    where, args = [], []
+    if date_from:
+        where.append("at >= ?")
+        args.append(date_from)
+    if date_to:
+        where.append("at < ?")
+        args.append(date_to + "T99")  # anything that day, whatever the time
+    if prod_order_no:
+        where.append("prod_order_no = ?")
+        args.append(prod_order_no)
+    sql = "SELECT * FROM progress_events"
+    if where:
+        sql += " WHERE " + " AND ".join(where)
+    sql += " ORDER BY id"
+    with get_conn() as conn:
+        return [dict(r) for r in conn.execute(sql, args).fetchall()]
 
 
 def get_day_plans() -> dict[str, dict]:

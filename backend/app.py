@@ -42,6 +42,7 @@ from db import (
     delete_day_override,
     get_day_overrides,
     get_product_minutes,
+    get_progress_events,
     get_work_hours,
     latest_snapshot,
     set_day_override,
@@ -1059,7 +1060,7 @@ def api_cavities_progress(request: Request, update: CavityUpdate):
                 detail=f"{CAVITY_STAGE_LABELS[update.stage]} can't drop below {CAVITY_STAGE_LABELS[nxt]} — {_fmt_qty(next_done)} already done there.",
             )
 
-    row = set_stage_progress(update.prod_order_no, update.stage, done)
+    row = set_stage_progress(update.prod_order_no, update.stage, done, actor(request))
     write_audit(actor(request), "cavities.progress",
                 f"{update.prod_order_no} {update.stage} -> {_fmt_qty(done)} of {_fmt_qty(total)}")
     row["total_qty"] = total
@@ -1154,7 +1155,7 @@ def api_powdercoat_progress(request: Request, update: PowdercoatUpdate):
                 detail=f"{PC_STAGE_LABELS[update.stage]} can't drop below {PC_STAGE_LABELS[nxt]} — {_fmt_qty(next_done)} already done there.",
             )
 
-    row = set_stage_progress(update.prod_order_no, update.stage, done)
+    row = set_stage_progress(update.prod_order_no, update.stage, done, actor(request))
     write_audit(actor(request), "powdercoat.progress",
                 f"{update.prod_order_no} {update.stage} -> {_fmt_qty(done)} of {_fmt_qty(total)}")
     row["total_qty"] = total
@@ -1213,7 +1214,7 @@ def api_factory_progress(request: Request, update: ProgressUpdate):
                 detail=f"{STAGE_LABELS[update.stage]} can't drop below {STAGE_LABELS[next_stage]} — {_fmt_qty(next_done)} already done there.",
             )
 
-    row = set_stage_progress(update.prod_order_no, update.stage, done)
+    row = set_stage_progress(update.prod_order_no, update.stage, done, actor(request))
     write_audit(actor(request), "factory.progress",
                 f"{update.prod_order_no} {update.stage} -> {_fmt_qty(done)}")
     row["total_qty"] = total
@@ -1695,6 +1696,90 @@ def floor_tool():
     the static mount so /floor resolves without the .html.
     """
     return FileResponse(FRONTEND_DIR / "floor.html", media_type="text/html")
+
+
+# ---------- progress history ----------
+
+
+def _line_for_pro(pro: str) -> tuple[str, dict, dict] | None:
+    """Which line a job is on, with its grouped row and the line's config."""
+    for line_id, line in LINES.items():
+        _, grouped = _pro_totals(line["dataset"])
+        if pro in grouped:
+            return line_id, line, grouped[pro]
+    return None
+
+
+def _unit_times(events: list[dict], stage: str) -> dict[int, str]:
+    """When each unit was ticked off at a step.
+
+    stage_progress only keeps a running total, so a unit's time is the moment
+    the total first reached it. Going backwards (a correction) releases the
+    units above the new total, and they take a new time if they are ticked
+    again.
+    """
+    times: dict[int, str] = {}
+    for e in events:
+        if e["stage"] != stage:
+            continue
+        to_qty = e["to_qty"]
+        if e["delta"] > 0:
+            for unit in range(int(e["from_qty"]) + 1, int(to_qty) + 1):
+                times[unit] = e["at"]
+        else:
+            for unit in list(times):
+                if unit > to_qty:
+                    del times[unit]
+    return times
+
+
+@app.get("/api/progress/events")
+def api_progress_events(date_from: str = "", date_to: str = "", prod_order_no: str = ""):
+    return {"events": get_progress_events(date_from or None, date_to or None, prod_order_no or None)}
+
+
+@app.get("/api/job/{prod_order_no}")
+def api_job(prod_order_no: str):
+    """One job as a grid of units against steps, for the unit tracker."""
+    found = _line_for_pro(prod_order_no)
+    if found is None:
+        raise HTTPException(status_code=404, detail=f"{prod_order_no} isn't in any current export.")
+    line_id, line, g = found
+
+    total = g["total_qty"]
+    progress = dict(get_stage_progress(prod_order_no) or {})
+    events = get_progress_events(prod_order_no=prod_order_no)
+
+    # Fractional quantities (powdercoat is cut in lengths) can't be a grid of
+    # whole units, so the tracker falls back to the quantity on those jobs.
+    whole_units = float(total).is_integer() and total > 0
+
+    stages = []
+    for st in line["stages"]:
+        done = min(progress.get(f"{st}_done", 0) or 0, total)
+        times = _unit_times(events, st) if whole_units else {}
+        stages.append({
+            "stage": st,
+            "label": line["labels"].get(st, st),
+            "done": done,
+            "units": [
+                {"unit": u, "done": u <= done, "at": times.get(u)}
+                for u in range(1, int(total) + 1)
+            ] if whole_units else [],
+        })
+
+    return {
+        "prod_order_no": prod_order_no,
+        "line": line_id,
+        "line_label": line["label"],
+        "sales_order_no": g.get("sales_order_no"),
+        "source_name": g.get("source_name"),
+        "due_date": min(g["due_dates"]) if g.get("due_dates") else None,
+        "total_qty": total,
+        "whole_units": whole_units,
+        "wm_number": _warehouse_movement(g),
+        "stages": stages,
+    }
 
 
 # ---------- settings ----------
