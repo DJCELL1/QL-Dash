@@ -1919,3 +1919,89 @@ button.who:hover { background: var(--baseline); color: var(--text-primary); }
 /* Printed in black, not red — most of these sheets come off a mono printer,
    and a red that prints as pale grey is the one word that must not go faint. */
 .print-table .cell-posted { font-weight: 800; font-size: 9px; letter-spacing: 0.06em; color: #000; }
+
+/* ---------- settings ---------- */
+
+.settings-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.settings-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 12px;
+}
+
+.num-input.wide { width: 220px; }
+
+/* Which line a step belongs to, so the hours grid reads in shop order. */
+.settings-line-tag {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-right: 6px;
+}
+
+.settings-saved { font-size: 12px; font-weight: 600; color: var(--success-text); }
+
+.settings-retired {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 5px;
+}
+
+/* BC's own estimate, under the box it is the fallback for. */
+.bc-hint {
+  display: block;
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-top: 2px;
+  white-space: nowrap;
+}
+
+.is-default-row { background: color-mix(in srgb, var(--series-1) 8%, transparent); }
+.is-default-row td { border-top: 1px solid var(--border); }
+
+/* ---------- footer ---------- */
+
+.site-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 24px;
+  padding: 20px;
+  margin-top: 28px;
+  border-top: 1px solid var(--border);
+  background: var(--surface-1);
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+/* Black artwork, so it flips to white on dark surfaces rather than being
+   tinted — the same treatment as the topbar lockup. */
+.footer-logo { height: 20px; width: auto; display: block; }
+:root[data-theme="dark"] .footer-logo { filter: brightness(0) invert(1); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .footer-logo { filter: brightness(0) invert(1); }
+}
+
+.footer-tag {
+  font-weight: 900;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--text-primary);
+}
+
+.footer-detail { display: flex; flex-wrap: wrap; gap: 4px 18px; margin-left: auto; }
+.footer-detail a { color: inherit; }

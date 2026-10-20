@@ -130,6 +130,30 @@ Note that powdercoat jobs are measured in both EA and LTHS. Per-row totals are
 right, but the floor's aggregate "items" tile sums the two together, which the
 subcontractor board deliberately avoids (see `fmtQtyTotals`).
 
+## Settings
+
+`/api/settings` serves everything the planner can change, and four POST routes
+write it back. All of them are admin-only.
+
+- `work_hours` - hours per step per weekday, seeded 8h Mon-Fri once.
+- `day_overrides` - overtime, shutdowns and public holidays; beats the weekly
+  pattern. Queensland holidays are seeded once at 0h and are editable. A blank
+  stage means every step.
+- `product_minutes` - minutes per unit per product group per step. Lookup order
+  is product row -> the `__default__` row -> BC's own estimate. Rows survive a
+  product leaving the exports and are shown marked `retired`.
+- `planning` - a JSON blob in `app_settings`: shift start, lead time, days
+  shown, capacity measure, daily rates, step offsets.
+
+A product group is `product_family(item_no)|strip_size(description)`. The
+family drops the trailing per-order serial; `strip_size` removes a stock length
+like `(2.8)` and a made-to-order size like `2700 x 920`, but deliberately keeps
+section sizes (`100 x 3.0mm`) and stud widths (`92mm`), which identify the
+product rather than size one order of it. Changing those regexes re-keys every
+stored row, so don't, without a migration.
+
+Seeding only runs while a table is empty, so an edit is never overwritten.
+
 ## Auth
 
 Signed cookie `prodash_session`, 30 days. Reading is open to anyone with the

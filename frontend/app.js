@@ -14,6 +14,9 @@
     adminsSet: true,   // false means nobody is an admin, so everyone counts as one
     subLaneExpanded: new Set(), // "<contractor>|<lane>" shown in full
     cavities: { rows: [], as_of: null, search: "", windowStart: null },
+    settings: null,
+    settingsLine: "doors",
+    settingsFilter: "",
     powdercoat: { rows: [], as_of: null },
     data: { joinery: null, subcontractors: null, factory: null, subBoard: null },
     history: { joinery: null, subcontractors: null },
@@ -357,6 +360,7 @@
       loadSubBoard(),
       loadCavities(),
       loadPowdercoat(),
+      loadSettings(),
       loadStatus(),
       loadWhoAmI(),
     ]);
@@ -3954,6 +3958,263 @@
     renderResetBar();
   }
 
+  // ---------- settings ----------
+
+  const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+  async function loadSettings() {
+    try {
+      state.settings = await fetchJSON("/api/settings");
+    } catch (e) {
+      state.settings = null;
+    }
+  }
+
+  function settingsLines() {
+    return (state.settings && state.settings.lines) || {};
+  }
+
+  // Every step on every line, in line order, so the hours grid reads top to
+  // bottom the way the shop runs.
+  function allStagePairs() {
+    const out = [];
+    for (const [lineId, line] of Object.entries(settingsLines())) {
+      for (const st of line.stages) out.push({ lineId, line, stage: st, label: line.labels[st] || st });
+    }
+    return out;
+  }
+
+  async function saveSettings(path, body, flashEl) {
+    try {
+      await postJSON(path, body);
+      if (flashEl) {
+        flashEl.textContent = "Saved";
+        setTimeout(() => { flashEl.textContent = ""; }, 1800);
+      }
+      return true;
+    } catch (e) {
+      notifyError(e, "Couldn't save that.");
+      await loadSettings();
+      renderSettings();
+      return false;
+    }
+  }
+
+  function renderHoursTable() {
+    const table = $("#settings-hours");
+    const pairs = allStagePairs();
+    table.querySelector("thead").innerHTML =
+      "<tr><th>Step</th>" + WEEKDAYS.map((w) => `<th>${w}</th>`).join("") + "</tr>";
+    table.querySelector("tbody").innerHTML = pairs.map(({ lineId, line, stage, label }) => {
+      const hours = (state.settings.work_hours || {})[stage] || {};
+      const cells = WEEKDAYS.map((_, wd) =>
+        `<td><input type="number" class="num-input hours-input" min="0" step="0.5"
+           data-stage="${stage}" data-weekday="${wd}" value="${hours[wd] ?? hours[String(wd)] ?? 0}"></td>`
+      ).join("");
+      return `<tr><td><span class="settings-line-tag">${escapeAttr(line.label)}</span> ${escapeAttr(label)}</td>${cells}</tr>`;
+    }).join("");
+
+    $$("#settings-hours .hours-input").forEach((input) => {
+      input.onchange = async () => {
+        const hours = Math.max(0, Number(input.value) || 0);
+        input.value = hours;
+        await saveSettings("/api/settings/hours", {
+          rows: [{ stage: input.dataset.stage, weekday: Number(input.dataset.weekday), hours }],
+        });
+      };
+    });
+  }
+
+  function renderDaysTable() {
+    const table = $("#settings-days");
+    const rows = state.settings.day_overrides || [];
+    table.querySelector("thead").innerHTML =
+      "<tr><th>Date</th><th>Step</th><th>Hours</th><th>Note</th><th></th></tr>";
+    table.querySelector("tbody").innerHTML = rows.length
+      ? rows.map((r) => {
+          const label = r.stage ? stageLabel(r.stage) : "All steps";
+          return `<tr><td>${fmtDate(r.the_date)}</td><td>${escapeAttr(label)}</td>
+            <td>${fmtNum(r.hours)}h</td><td>${escapeAttr(r.note || "")}</td>
+            <td><button class="sc-btn" type="button" data-del-date="${r.the_date}" data-del-stage="${escapeAttr(r.stage)}" title="Remove">×</button></td></tr>`;
+        }).join("")
+      : '<tr><td colspan="5" class="cell-muted">No specific days set.</td></tr>';
+
+    $$("#settings-days [data-del-date]").forEach((btn) => {
+      btn.onclick = async () => {
+        const q = new URLSearchParams({ stage: btn.dataset.delStage || "" });
+        const res = await fetch(`/api/settings/day/${btn.dataset.delDate}?${q}`, { method: "DELETE" });
+        if (!res.ok) { notifyError(null, "Couldn't remove that day."); return; }
+        await loadSettings();
+        renderSettings();
+      };
+    });
+  }
+
+  function minutesFor(group, stage) {
+    const stored = (state.settings.product_minutes || {})[group] || {};
+    return stored[stage];
+  }
+
+  function visibleProducts() {
+    const q = state.settingsFilter.trim().toLowerCase();
+    return (state.settings.products || [])
+      .filter((pr) => pr.line === state.settingsLine || (pr.retired && !pr.line))
+      .filter((pr) => !q || `${pr.family} ${pr.description}`.toLowerCase().includes(q));
+  }
+
+  function renderMinutesTable() {
+    const line = settingsLines()[state.settingsLine];
+    if (!line) return;
+    const table = $("#settings-minutes");
+    const stages = line.stages;
+    table.querySelector("thead").innerHTML =
+      "<tr><th>Product</th>" + stages.map((s) => `<th>${escapeAttr(line.labels[s] || s)}</th>`).join("") + "</tr>";
+
+    const cell = (group, stage, bc) => {
+      const v = minutesFor(group, stage);
+      const hint = bc != null ? `<span class="bc-hint" title="Business Central's own estimate">BC ${fmtNum(bc)}</span>` : "";
+      return `<td><input type="number" class="num-input mins-input" min="0" step="0.1"
+        data-group="${escapeAttr(group)}" data-stage="${stage}" value="${v ?? ""}" placeholder="—">${hint}</td>`;
+    };
+
+    const defaultRow = `<tr class="is-default-row"><td><b>Default</b> <span class="cell-muted">— used when a product has no figure</span></td>` +
+      stages.map((s) => cell("__default__", s, null)).join("") + "</tr>";
+
+    const body = visibleProducts().map((pr) => {
+      const tag = pr.retired ? ' <span class="settings-retired" title="No longer in the exports">retired</span>' : "";
+      return `<tr><td><b>${escapeAttr(pr.family)}</b>${tag}<div class="cell-muted">${escapeAttr(pr.description)}</div></td>` +
+        stages.map((s) => cell(pr.group, s, pr.bc_estimate)).join("") + "</tr>";
+    }).join("");
+
+    table.querySelector("tbody").innerHTML = defaultRow + (body ||
+      '<tr><td colspan="' + (stages.length + 1) + '" class="cell-muted">No products match that filter.</td></tr>');
+
+    $$("#settings-minutes .mins-input").forEach((input) => {
+      input.onchange = async () => {
+        const raw = input.value.trim();
+        await saveSettings("/api/settings/minutes", {
+          rows: [{ product_group: input.dataset.group, stage: input.dataset.stage, minutes: raw === "" ? "" : Number(raw) }],
+        }, $("#minutes-saved"));
+        await loadSettings();
+        renderMinutesTable();
+      };
+    });
+  }
+
+  function renderPlanningGrid() {
+    const pl = state.settings.planning || {};
+    const lines = settingsLines();
+    const num = (key, label, step = 1) =>
+      `<label class="capacity-label">${label}
+        <input type="number" class="num-input" min="0" step="${step}" data-plan="${key}" value="${pl[key] ?? 0}"></label>`;
+    const rates = Object.entries(lines).map(([id, ln]) =>
+      `<label class="capacity-label">${escapeAttr(ln.label)} / day
+        <input type="number" class="num-input" min="0" step="1" data-rate="${id}" value="${(pl.daily_rates || {})[id] ?? 0}"></label>`).join("");
+    const offsets = Object.entries(pl.stage_offsets || {}).map(([stage, v]) =>
+      `<label class="capacity-label">${escapeAttr(stageLabel(stage))} +d
+        <input type="number" class="num-input" min="0" step="1" data-offset="${stage}" value="${v}"></label>`).join("");
+
+    $("#settings-planning").innerHTML = `
+      <label class="capacity-label">Shift start
+        <input type="time" class="num-input" data-plan="shift_start" value="${pl.shift_start || "07:00"}"></label>
+      ${num("lead_time_days", "Lead time (days)")}
+      <label class="capacity-label">Days shown
+        <select data-plan="days_shown">${[10, 15, 20].map((n) =>
+          `<option value="${n}" ${pl.days_shown === n ? "selected" : ""}>${n}</option>`).join("")}</select></label>
+      <label class="capacity-label">Capacity measured in
+        <select data-plan="capacity_measure">${[["hours", "Hours"], ["count", "Count"], ["sqm", "m²"], ["linear", "Linear metres"]]
+          .map(([v, t]) => `<option value="${v}" ${pl.capacity_measure === v ? "selected" : ""}>${t}</option>`).join("")}</select></label>
+      ${rates}
+      ${offsets}`;
+
+    const save = async (values) => {
+      await saveSettings("/api/settings/planning", { values });
+      await loadSettings();
+    };
+    $$("#settings-planning [data-plan]").forEach((el) => {
+      el.onchange = () => {
+        const key = el.dataset.plan;
+        const v = el.type === "number" ? Number(el.value) || 0 : el.tagName === "SELECT" && key === "days_shown" ? Number(el.value) : el.value;
+        save({ [key]: v });
+      };
+    });
+    $$("#settings-planning [data-rate]").forEach((el) => {
+      el.onchange = () => save({ daily_rates: { ...(pl.daily_rates || {}), [el.dataset.rate]: Number(el.value) || 0 } });
+    });
+    $$("#settings-planning [data-offset]").forEach((el) => {
+      el.onchange = () => save({ stage_offsets: { ...(pl.stage_offsets || {}), [el.dataset.offset]: Number(el.value) || 0 } });
+    });
+  }
+
+  function renderSettings() {
+    if (!state.settings) { loadSettings().then(() => state.settings && renderSettings()); return; }
+
+    const lineSel = $("#minutes-line");
+    if (!lineSel.options.length) {
+      lineSel.innerHTML = Object.entries(settingsLines())
+        .map(([id, ln]) => `<option value="${id}">${escapeAttr(ln.label)}</option>`).join("");
+      lineSel.value = state.settingsLine;
+      lineSel.onchange = () => { state.settingsLine = lineSel.value; renderMinutesTable(); };
+    }
+    const stageSel = $("#day-stage");
+    if (!stageSel.options.length) {
+      stageSel.innerHTML = '<option value="">All steps</option>' +
+        allStagePairs().map((p) => `<option value="${p.stage}">${escapeAttr(p.line.label)} — ${escapeAttr(p.label)}</option>`).join("");
+    }
+    const filter = $("#minutes-filter");
+    filter.value = state.settingsFilter;
+    filter.oninput = () => { state.settingsFilter = filter.value; renderMinutesTable(); };
+
+    $("#day-add").onclick = async () => {
+      const the_date = $("#day-date").value;
+      if (!the_date) { notifyError(null, "Pick a date first."); return; }
+      const ok = await saveSettings("/api/settings/day", {
+        the_date, stage: $("#day-stage").value,
+        hours: Number($("#day-hours").value) || 0, note: $("#day-note").value.trim(),
+      });
+      if (!ok) return;
+      $("#day-note").value = "";
+      await loadSettings();
+      renderSettings();
+    };
+
+    // Bulk tools work on whatever the filter is showing, and only fill blanks,
+    // so a figure someone has set by hand is never quietly overwritten.
+    $("#minutes-apply-shown").onclick = async () => {
+      const line = settingsLines()[state.settingsLine];
+      const raw = prompt(`Minutes per unit to put in every blank box for the ${visibleProducts().length} product(s) shown:`);
+      if (raw === null || raw.trim() === "") return;
+      const minutes = Number(raw);
+      if (!(minutes >= 0)) { notifyError(null, "That isn't a number."); return; }
+      const rows = [];
+      for (const pr of visibleProducts())
+        for (const st of line.stages)
+          if (minutesFor(pr.group, st) == null) rows.push({ product_group: pr.group, stage: st, minutes });
+      if (!rows.length) { notifyError(null, "Nothing blank to fill."); return; }
+      await saveSettings("/api/settings/minutes", { rows }, $("#minutes-saved"));
+      await loadSettings();
+      renderMinutesTable();
+    };
+
+    $("#minutes-copy-bc").onclick = async () => {
+      const line = settingsLines()[state.settingsLine];
+      const rows = [];
+      for (const pr of visibleProducts())
+        if (pr.bc_estimate != null)
+          for (const st of line.stages)
+            if (minutesFor(pr.group, st) == null) rows.push({ product_group: pr.group, stage: st, minutes: pr.bc_estimate });
+      if (!rows.length) { notifyError(null, "Nothing blank with a BC estimate to copy."); return; }
+      await saveSettings("/api/settings/minutes", { rows }, $("#minutes-saved"));
+      await loadSettings();
+      renderMinutesTable();
+    };
+
+    renderHoursTable();
+    renderDaysTable();
+    renderMinutesTable();
+    renderPlanningGrid();
+  }
+
   const BOARD_VIEWS = new Set(["scheduling", "cavities"]);
 
   function render() {
@@ -3963,6 +4224,7 @@
     else if (state.view === "factory") renderFactory();
     else if (state.view === "cavities") renderCavities();
     else if (state.view === "labels") renderLabels();
+    else if (state.view === "settings") renderSettings();
     else renderScheduling();
   }
 
@@ -4811,6 +5073,7 @@
         $("#view-scheduling").hidden = state.view !== "scheduling";
         $("#view-cavities").hidden = state.view !== "cavities";
         $("#view-labels").hidden = state.view !== "labels";
+        $("#view-settings").hidden = state.view !== "settings";
         render();
       });
     });

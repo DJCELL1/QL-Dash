@@ -25,6 +25,7 @@
         <button class="tab-btn" data-view="scheduling">Door schedule</button>
         <button class="tab-btn" data-view="cavities">Cavities schedule</button>
         <button class="tab-btn" data-view="labels">Labels</button>
+        <button class="tab-btn" data-view="settings">Settings</button>
       </nav>
     </div>
     <div class="topbar-right">
@@ -328,7 +329,60 @@ PRO-330659: L2.02, L2.02, L2.03, L2.03</pre>
       <div class="empty-state" id="cavities-empty" hidden></div>
     </section>
 
+    <section class="view" id="view-settings" hidden>
+
+      <div class="chart-card">
+        <h2>WORKING HOURS.</h2>
+        <p class="leveling-note">Hours available at each step, per weekday. The boards measure a day's work against these, and a day at zero is closed.</p>
+        <div class="table-wrap"><table class="data-table" id="settings-hours"><thead></thead><tbody></tbody></table></div>
+      </div>
+
+      <div class="chart-card">
+        <h2>SPECIFIC DAYS.</h2>
+        <p class="leveling-note">Overtime, shutdowns and public holidays. These beat the weekly pattern above. Queensland public holidays are loaded at zero hours — edit or remove any that don't apply.</p>
+        <div class="settings-row">
+          <label class="capacity-label">Date <input type="date" class="num-input" id="day-date"></label>
+          <label class="capacity-label">Step <select id="day-stage"></select></label>
+          <label class="capacity-label">Hours <input type="number" class="num-input" id="day-hours" min="0" step="0.5" value="0"></label>
+          <label class="capacity-label">Note <input type="text" class="num-input wide" id="day-note" placeholder="Shutdown, overtime…"></label>
+          <button class="btn" id="day-add">Add</button>
+        </div>
+        <div class="table-wrap"><table class="data-table" id="settings-days"><thead></thead><tbody></tbody></table></div>
+      </div>
+
+      <div class="chart-card">
+        <h2>MINUTES PER UNIT.</h2>
+        <p class="leveling-note">How long one unit takes at each step. A product's own figure wins; otherwise the default row; otherwise BC's estimate, shown in grey under each box. Products no longer in the exports are kept and marked.</p>
+        <div class="settings-row">
+          <label class="capacity-label">Line <select id="minutes-line"></select></label>
+          <label class="capacity-label">Filter <input type="search" class="num-input wide" id="minutes-filter" placeholder="Search product…"></label>
+          <button class="btn" id="minutes-apply-shown" title="Put one figure into every blank box in the filtered list">Apply to shown…</button>
+          <button class="btn" id="minutes-copy-bc" title="Fill blank boxes with BC's own estimate">Copy BC estimates into blanks</button>
+          <span class="settings-saved" id="minutes-saved"></span>
+        </div>
+        <div class="table-wrap"><table class="data-table" id="settings-minutes"><thead></thead><tbody></tbody></table></div>
+      </div>
+
+      <div class="chart-card">
+        <h2>PLANNING.</h2>
+        <div class="settings-grid" id="settings-planning"></div>
+      </div>
+
+    </section>
+
   </main>
+
+  <footer class="site-footer">
+    <img class="footer-logo" src="assets/criterion-logo.png" alt="Criterion Industries">
+    <div class="footer-tag">Innovation that works.</div>
+    <div class="footer-detail">
+      <span>Criterion Industries QLD</span>
+      <span>22 Holt Street, Pinkenba QLD 4009</span>
+      <span><a href="tel:+61731938990">07 3193 8990</a></span>
+      <span><a href="mailto:sales.qld@criterionindustries.com.au">sales.qld@criterionindustries.com.au</a></span>
+      <span>Mon&ndash;Fri 7:00am &ndash; 4:30pm</span>
+    </div>
+  </footer>
 </div>
 
 <div class="readonly-banner" id="readonlyBanner" hidden>

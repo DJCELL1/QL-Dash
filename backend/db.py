@@ -93,6 +93,34 @@ CREATE TABLE IF NOT EXISTS processed_files (
     error TEXT
 );
 
+CREATE TABLE IF NOT EXISTS work_hours (
+    stage TEXT NOT NULL,
+    weekday INTEGER NOT NULL,          -- 0 = Monday ... 6 = Sunday
+    hours REAL NOT NULL DEFAULT 0,
+    PRIMARY KEY (stage, weekday)
+);
+
+-- Overtime, shutdowns and public holidays: whatever the weekday would normally
+-- give, this wins for that date. stage '' means every step on that line.
+CREATE TABLE IF NOT EXISTS day_overrides (
+    the_date TEXT NOT NULL,
+    stage TEXT NOT NULL DEFAULT '',
+    hours REAL NOT NULL DEFAULT 0,
+    note TEXT NOT NULL DEFAULT '',
+    PRIMARY KEY (the_date, stage)
+);
+
+-- Minutes per unit at a step, for a product group. The group '__default__' is
+-- the catch-all; a product row beats it, and BC's own estimate is the last
+-- resort. Rows are kept when a product drops out of the exports.
+CREATE TABLE IF NOT EXISTS product_minutes (
+    product_group TEXT NOT NULL,
+    stage TEXT NOT NULL,
+    minutes REAL NOT NULL,
+    updated_at TEXT NOT NULL DEFAULT '',
+    PRIMARY KEY (product_group, stage)
+);
+
 CREATE TABLE IF NOT EXISTS stage_progress (
     prod_order_no TEXT PRIMARY KEY,
     cut_to_size_done REAL NOT NULL DEFAULT 0,
@@ -944,6 +972,77 @@ def set_sub_status(prod_order_no: str, work_centre_no: str, **fields) -> dict:
 
 
 # ---------- users and settings ----------
+
+
+def get_work_hours() -> dict[str, dict[int, float]]:
+    out: dict[str, dict[int, float]] = {}
+    with get_conn() as conn:
+        for r in conn.execute("SELECT stage, weekday, hours FROM work_hours"):
+            out.setdefault(r["stage"], {})[r["weekday"]] = r["hours"]
+    return out
+
+
+def set_work_hours(rows: list[dict]) -> None:
+    with get_conn() as conn:
+        conn.executemany(
+            "INSERT INTO work_hours (stage, weekday, hours) VALUES (?, ?, ?) "
+            "ON CONFLICT(stage, weekday) DO UPDATE SET hours = excluded.hours",
+            [(r["stage"], int(r["weekday"]), float(r["hours"])) for r in rows],
+        )
+
+
+def get_day_overrides() -> list[dict]:
+    with get_conn() as conn:
+        cur = conn.execute(
+            "SELECT the_date, stage, hours, note FROM day_overrides ORDER BY the_date, stage"
+        )
+        return [dict(r) for r in cur.fetchall()]
+
+
+def set_day_override(the_date: str, stage: str, hours: float, note: str) -> None:
+    with get_conn() as conn:
+        conn.execute(
+            "INSERT INTO day_overrides (the_date, stage, hours, note) VALUES (?, ?, ?, ?) "
+            "ON CONFLICT(the_date, stage) DO UPDATE SET hours = excluded.hours, note = excluded.note",
+            (the_date, stage, float(hours), note),
+        )
+
+
+def delete_day_override(the_date: str, stage: str) -> None:
+    with get_conn() as conn:
+        conn.execute("DELETE FROM day_overrides WHERE the_date = ? AND stage = ?", (the_date, stage))
+
+
+def get_product_minutes() -> dict[str, dict[str, float]]:
+    out: dict[str, dict[str, float]] = {}
+    with get_conn() as conn:
+        for r in conn.execute("SELECT product_group, stage, minutes FROM product_minutes"):
+            out.setdefault(r["product_group"], {})[r["stage"]] = r["minutes"]
+    return out
+
+
+def set_product_minutes(rows: list[dict]) -> int:
+    from datetime import datetime, timezone
+
+    now = datetime.now(timezone.utc).isoformat()
+    with get_conn() as conn:
+        # A blank value clears the row so the fallback takes over again.
+        clear = [(r["product_group"], r["stage"]) for r in rows if r.get("minutes") in (None, "")]
+        if clear:
+            conn.executemany("DELETE FROM product_minutes WHERE product_group = ? AND stage = ?", clear)
+        keep = [
+            (r["product_group"], r["stage"], float(r["minutes"]), now)
+            for r in rows
+            if r.get("minutes") not in (None, "")
+        ]
+        if keep:
+            conn.executemany(
+                "INSERT INTO product_minutes (product_group, stage, minutes, updated_at) VALUES (?, ?, ?, ?) "
+                "ON CONFLICT(product_group, stage) DO UPDATE SET minutes = excluded.minutes, "
+                "updated_at = excluded.updated_at",
+                keep,
+            )
+    return len(rows)
 
 
 def get_setting(key: str) -> str | None:

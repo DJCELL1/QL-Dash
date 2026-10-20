@@ -1,5 +1,6 @@
 """FastAPI app serving the Production Scheduler dashboard."""
 import hashlib
+import json
 import logging
 import os
 import re
@@ -38,7 +39,14 @@ from db import (
     set_sub_status,
     history_counts,
     init_db,
+    delete_day_override,
+    get_day_overrides,
+    get_product_minutes,
+    get_work_hours,
     latest_snapshot,
+    set_day_override,
+    set_product_minutes,
+    set_work_hours,
     pros_with_dated_schedule,
     records_last_seen,
     recent_audit,
@@ -178,6 +186,7 @@ def _startup():
     global _observer
     init_db()
     _session_secret()
+    _seed_settings()
     _seed_first_user()
     _seed_first_admin()
     if WATCH_FOLDER:
@@ -1686,6 +1695,249 @@ def floor_tool():
     the static mount so /floor resolves without the .html.
     """
     return FileResponse(FRONTEND_DIR / "floor.html", media_type="text/html")
+
+
+# ---------- settings ----------
+
+# The three lines the floor runs, each with its own steps and its own export.
+LINES = {
+    "doors": {"label": "Aluminium doors", "stages": STAGES, "labels": STAGE_LABELS, "dataset": "joinery"},
+    "cavities": {"label": "Cavities", "stages": CAVITY_STAGES, "labels": CAVITY_STAGE_LABELS, "dataset": "cavities"},
+    "powdercoat": {"label": "Powdercoating", "stages": PC_STAGES, "labels": PC_STAGE_LABELS, "dataset": PC_DATASET},
+}
+ALL_STAGES = tuple(st for ln in LINES.values() for st in ln["stages"])
+
+DEFAULT_GROUP = "__default__"
+
+# A stock length in metres, e.g. "(2.8)". One decimal place on purpose, so it
+# can't swallow "(For 92mm Studs)" — the stud width is part of the product.
+_LENGTH_IN_PARENS = re.compile(r"\s*\(\s*\d+\.\d\s*\)")
+# A made-to-order size, e.g. "2700 x 920" or "2,040 x 1,200". The lookahead
+# keeps section sizes like "100 x 3.0mm", which name the profile instead.
+_MADE_TO_SIZE = re.compile(r"\s*\b\d[\d,]*(?:\.\d+)?\s*[xX]\s*\d[\d,]*(?:\.\d+)?\b(?!\s*mm)")
+
+
+def product_family(item_no: str | None) -> str:
+    """The item number with its per-order serial dropped."""
+    parts = str(item_no or "").split("-")
+    return "-".join(parts[:-1]) if len(parts) > 1 and parts[-1].isdigit() else str(item_no or "")
+
+
+def strip_size(description: str | None) -> str:
+    text = _LENGTH_IN_PARENS.sub("", str(description or ""))
+    text = _MADE_TO_SIZE.sub("", text)
+    return re.sub(r"\s{2,}", " ", text).strip(" ,-")
+
+
+def product_group_key(item_no: str | None, description: str | None) -> str:
+    return f"{product_family(item_no)}|{strip_size(description)}"
+
+
+PLANNING_DEFAULTS = {
+    "shift_start": "07:00",
+    "lead_time_days": 3,
+    "days_shown": 10,
+    "capacity_measure": "hours",      # count | sqm | linear | hours
+    "capacity_stage": "",             # blank = the first step on the line
+    "daily_rates": {"doors": 20, "cavities": 8, "powdercoat": 40},
+    "stage_offsets": {"machining": 0, "components": 1, "build": 1, "wrap": 1},
+}
+
+
+def get_planning() -> dict:
+    stored = get_setting("planning")
+    out = dict(PLANNING_DEFAULTS)
+    if stored:
+        try:
+            out.update(json.loads(stored))
+        except ValueError:
+            pass
+    return out
+
+
+# Queensland public holidays. Seeded once at zero hours and editable after
+# that, because the dates move and the shop knows its own shutdown better than
+# a hard-coded list does.
+QLD_HOLIDAYS_2026 = [
+    ("2026-01-01", "New Year's Day"),
+    ("2026-01-26", "Australia Day"),
+    ("2026-04-03", "Good Friday"),
+    ("2026-04-04", "Easter Saturday"),
+    ("2026-04-06", "Easter Monday"),
+    ("2026-04-25", "Anzac Day"),
+    ("2026-05-04", "Labour Day"),
+    ("2026-08-12", "Royal Queensland Show (Brisbane)"),
+    ("2026-10-05", "King's Birthday"),
+    ("2026-12-25", "Christmas Day"),
+    ("2026-12-26", "Boxing Day"),
+]
+
+
+def _seed_settings():
+    """Give every step a working week and load the holidays, once.
+
+    Only runs while the tables are empty, so an edit is never overwritten.
+    """
+    if not get_work_hours():
+        planning = get_planning()
+        rows = [
+            {"stage": st, "weekday": wd, "hours": 8.0 if wd < 5 else 0.0}
+            for st in ALL_STAGES
+            for wd in range(7)
+        ]
+        set_work_hours(rows)
+        logger.info("Seeded an 8h Mon-Fri week for %d steps (shift start %s)",
+                    len(ALL_STAGES), planning["shift_start"])
+    if not get_day_overrides():
+        for the_date, note in QLD_HOLIDAYS_2026:
+            set_day_override(the_date, "", 0.0, note)
+        logger.info("Seeded %d Queensland public holidays", len(QLD_HOLIDAYS_2026))
+
+
+def _product_catalogue() -> list[dict]:
+    """Every product group in the current exports, with BC's own estimate.
+
+    BC gives minutes for the whole operation line, so it is divided by the
+    quantity to get minutes per unit, then averaged across the rows in the
+    group — they agree with each other in practice.
+    """
+    seen: dict[str, dict] = {}
+    for line_id, line in LINES.items():
+        snap = latest_snapshot(line["dataset"])
+        if not snap:
+            continue
+        for r in get_records_for_snapshot(snap["id"]):
+            key = product_group_key(r.get("item_no"), r.get("item_description"))
+            if key == "|":
+                continue
+            entry = seen.setdefault(key, {
+                "group": key,
+                "line": line_id,
+                "family": product_family(r.get("item_no")),
+                "description": strip_size(r.get("item_description")),
+                "rows": 0,
+                "_mins": [],
+            })
+            entry["rows"] += 1
+            try:
+                mins = float(r.get("expected_capacity_need_minutes") or 0)
+                qty = float(r.get("quantity") or 0)
+                if mins > 0 and qty > 0:
+                    entry["_mins"].append(mins / qty)
+            except (TypeError, ValueError):
+                pass
+    out = []
+    for entry in seen.values():
+        mins = entry.pop("_mins")
+        entry["bc_estimate"] = round(sum(mins) / len(mins), 2) if mins else None
+        out.append(entry)
+    out.sort(key=lambda e: (e["line"], e["family"], e["description"]))
+    return out
+
+
+@app.get("/api/settings")
+def api_settings():
+    stored_minutes = get_product_minutes()
+    catalogue = _product_catalogue()
+    live = {e["group"] for e in catalogue}
+    # Products that have dropped out of the exports keep their settings, and
+    # are listed so they can still be seen and cleared.
+    for group in stored_minutes:
+        if group not in live and group != DEFAULT_GROUP:
+            family, _, description = group.partition("|")
+            catalogue.append({"group": group, "line": "", "family": family,
+                              "description": description, "rows": 0,
+                              "bc_estimate": None, "retired": True})
+    return {
+        "lines": {k: {"label": v["label"], "stages": list(v["stages"]),
+                      "labels": dict(v["labels"])} for k, v in LINES.items()},
+        "work_hours": {st: get_work_hours().get(st, {}) for st in ALL_STAGES},
+        "day_overrides": get_day_overrides(),
+        "product_minutes": stored_minutes,
+        "products": catalogue,
+        "planning": get_planning(),
+    }
+
+
+class WorkHoursIn(BaseModel):
+    rows: list[dict]
+
+
+@app.post("/api/settings/hours")
+def api_set_hours(request: Request, body: WorkHoursIn):
+    require_admin(request, "change working hours")
+    for r in body.rows:
+        if r.get("stage") not in ALL_STAGES:
+            raise HTTPException(status_code=400, detail=f"Unknown step '{r.get('stage')}'.")
+        if not 0 <= int(r.get("weekday", -1)) <= 6:
+            raise HTTPException(status_code=400, detail="weekday must be 0-6.")
+        if float(r.get("hours", 0)) < 0:
+            raise HTTPException(status_code=400, detail="Hours can't be negative.")
+    set_work_hours(body.rows)
+    write_audit(actor(request), "settings.hours", f"{len(body.rows)} rows")
+    return {"saved": len(body.rows)}
+
+
+class DayOverrideIn(BaseModel):
+    the_date: str
+    stage: str = ""
+    hours: float = Field(ge=0)
+    note: str = ""
+
+
+@app.post("/api/settings/day")
+def api_set_day(request: Request, body: DayOverrideIn):
+    require_admin(request, "change a day's hours")
+    if body.stage and body.stage not in ALL_STAGES:
+        raise HTTPException(status_code=400, detail=f"Unknown step '{body.stage}'.")
+    set_day_override(body.the_date, body.stage, body.hours, body.note)
+    write_audit(actor(request), "settings.day", f"{body.the_date} {body.stage or 'all'} -> {body.hours}h")
+    return {"saved": True}
+
+
+@app.delete("/api/settings/day/{the_date}")
+def api_delete_day(request: Request, the_date: str, stage: str = ""):
+    require_admin(request, "clear a day's hours")
+    delete_day_override(the_date, stage)
+    write_audit(actor(request), "settings.day.delete", f"{the_date} {stage or 'all'}")
+    return {"deleted": True}
+
+
+class MinutesIn(BaseModel):
+    rows: list[dict]
+
+
+@app.post("/api/settings/minutes")
+def api_set_minutes(request: Request, body: MinutesIn):
+    require_admin(request, "change minutes per unit")
+    for r in body.rows:
+        if r.get("stage") not in ALL_STAGES:
+            raise HTTPException(status_code=400, detail=f"Unknown step '{r.get('stage')}'.")
+        if r.get("minutes") not in (None, "") and float(r["minutes"]) < 0:
+            raise HTTPException(status_code=400, detail="Minutes can't be negative.")
+    set_product_minutes(body.rows)
+    write_audit(actor(request), "settings.minutes", f"{len(body.rows)} rows")
+    return {"saved": len(body.rows)}
+
+
+class PlanningIn(BaseModel):
+    values: dict
+
+
+@app.post("/api/settings/planning")
+def api_set_planning(request: Request, body: PlanningIn):
+    require_admin(request, "change planning settings")
+    allowed = set(PLANNING_DEFAULTS)
+    unknown = set(body.values) - allowed
+    if unknown:
+        raise HTTPException(status_code=400, detail=f"Unknown setting(s): {', '.join(sorted(unknown))}")
+    merged = get_planning()
+    merged.update(body.values)
+    if merged["capacity_measure"] not in ("count", "sqm", "linear", "hours"):
+        raise HTTPException(status_code=400, detail="capacity_measure must be count, sqm, linear or hours.")
+    set_setting("planning", json.dumps(merged))
+    write_audit(actor(request), "settings.planning", ", ".join(sorted(body.values)))
+    return merged
 
 
 app.mount("/", StaticFiles(directory=str(FRONTEND_DIR), html=True), name="frontend")
