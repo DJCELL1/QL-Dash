@@ -1397,7 +1397,7 @@
   const SUB_LANE_PREVIEW = 5;
 
   const SUB_LANES = [
-    { id: "waiting_material", label: "Waiting on material" },
+    { id: "waiting_material", label: "Picking material" },
     { id: "ready_despatch", label: "Ready to coat" },
     { id: "at_sub", label: "In powdercoating" },
     { id: "ready", label: "Coated" },
@@ -2185,7 +2185,7 @@
   const RUN_SHEET_SECTIONS = [
     { id: "at_sub", label: "In production" },
     { id: "ready_despatch", label: "Material ready for manufacture" },
-    { id: "waiting_material", label: "Coming — waiting on material" },
+    { id: "waiting_material", label: "Coming — picking material" },
   ];
 
   function printHeaderHTML(kicker, title, metaRows) {
