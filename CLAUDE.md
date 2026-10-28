@@ -156,6 +156,12 @@ the brand and finish the description mentions. One-word names (White, Black) onl
 match a description that is just that name, and anything mentioning RAL is left
 unmatched, because neither chart covers RAL.
 
+Before any of that, `aliases` in `powder_colours.json` map the shop's own names
+to a chart code by their set of words, so order doesn't matter: "Black Satin"
+and "Satin Black" are Duralloy RapidCure Black (C/B Night Sky) Satin
+`2609128S`. Brand and range words are ignored, the finish is not, and an alias
+steps aside when the description names a different brand. Add new ones there.
+
 The library is `backend/powder_colours.json`, 213 colours built from the Dulux
 Duralloy Solid Colour Range and Interpon D2525/D3020 Commercial Collection PDFs
 by `tools/extract_powder_colours.py`. Interpon prints RGB values. Dulux only has

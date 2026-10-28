@@ -29,11 +29,31 @@ def _words(text: str | None) -> str:
 
 
 @lru_cache(maxsize=1)
-def _library_cached(mtime: float) -> tuple[dict, ...]:
+def _raw_cached(mtime: float) -> dict:
     try:
-        raw = json.loads(LIBRARY_PATH.read_text(encoding="utf-8"))
+        return json.loads(LIBRARY_PATH.read_text(encoding="utf-8"))
     except (OSError, ValueError):
-        return ()
+        return {}
+
+
+def _raw() -> dict:
+    try:
+        return _raw_cached(LIBRARY_PATH.stat().st_mtime)
+    except OSError:
+        return {}
+
+
+def aliases() -> dict[frozenset, str]:
+    """The shop's own names for a chart colour ("Black Satin"), as the set of
+    words in it -> the chart code. Word order doesn't matter, so "Satin Black"
+    is the same alias."""
+    return {frozenset(_words(a["words"]).split()): norm(a["code"])
+            for a in _raw().get("aliases", []) if a.get("words") and a.get("code")}
+
+
+@lru_cache(maxsize=1)
+def _library_cached(mtime: float) -> tuple[dict, ...]:
+    raw = _raw()
     out = []
     for c in raw.get("colours", []):
         if not c.get("name") or not c.get("hex"):
@@ -78,6 +98,7 @@ class Matcher:
             (n for n in self.by_name if len(n.replace(" ", "")) >= _MIN_NAME_LEN),
             key=len, reverse=True,
         )
+        self.aliases = aliases()
         self._cache: dict[tuple, dict | None] = {}
 
     def match(self, code: str | None, description: str | None) -> dict | None:
@@ -92,6 +113,14 @@ class Matcher:
                 m = self.manual[k]
                 return _out(m["colour_key"], m["name"], m.get("brand", ""), m.get("code", ""), m["hex"], "manual")
         words = _words(description)
+        wanted = self.aliases.get(frozenset(w for w in words.split() if w not in _BRAND_ONLY))
+        if wanted and wanted in self.by_code:
+            target = self.by_code[wanted]
+            padded = f" {words} "
+            # "Interpon Black Satin" is Interpon's, not the shop's Dulux one
+            other = any(f" {w} " in padded for b, ws in _BRAND_WORDS.items() if b != target["brand"] for w in ws)
+            if not other:
+                return _lib(target, "alias")
         for token in [norm(code)] + [norm(t) for t in words.split()]:
             if token and token in self.by_code:
                 return _lib(self.by_code[token], "code")
@@ -110,6 +139,9 @@ class Matcher:
                 return _lib(_best(self.by_name[name], words), "name")
         return None
 
+
+# Brand and range words, which an alias ignores; the finish is part of an alias.
+_BRAND_ONLY = {"DULUX", "DURALLOY", "INTERPON", "POWDER", "POWDERCOAT", "COAT", "RAPIDCURE"}
 
 # Words a description carries around the colour's name: brand, range and finish.
 _NOISE = {"DULUX", "DURALLOY", "INTERPON", "D2525", "D3020", "POWDER", "POWDERCOAT", "COAT",
