@@ -661,14 +661,12 @@ def api_history(dataset: str):
 
 
 # The aluminium door line at Queensland, in the order work moves through it.
-# Every door runs all five — there are no optional stages on this line.
-STAGES = ("cut_to_size", "machining", "components", "build", "wrap")
+# Every door runs all three — there are no optional stages on this line.
+STAGES = ("picking", "machining", "build_wrap")
 STAGE_LABELS = {
-    "cut_to_size": "Cut to size",
+    "picking": "Picking",
     "machining": "Machining",
-    "components": "Components",
-    "build": "Build",
-    "wrap": "Wrap",
+    "build_wrap": "Build/Wrap",
 }
 
 BASE_STAGES = STAGES
@@ -676,7 +674,7 @@ BASE_STAGES = STAGES
 def _stages_for(g: dict) -> tuple[str, ...]:
     """The stages this job goes through, in shop order.
 
-    Every aluminium door runs the same five. The WA line had optional glazing
+    Every aluminium door runs the same three. The WA line had optional glazing
     and edge-stripping stages keyed off markers in the item description; this
     line has no such branch, so each job gets the full list.
     """
@@ -1907,7 +1905,7 @@ PLANNING_DEFAULTS = {
     "capacity_measure": "hours",      # count | sqm | linear | hours
     "capacity_stage": "",             # blank = the first step on the line
     "daily_rates": {"doors": 20, "cavities": 8, "powdercoat": 40},
-    "stage_offsets": {"machining": 0, "components": 1, "build": 1, "wrap": 1},
+    "stage_offsets": {"machining": 0, "build_wrap": 1},
     # Label stock. The short roll is what's loaded today; the taller one has
     # the room for a barcode.
     "label_door_w": 102,
@@ -1924,6 +1922,12 @@ def get_planning() -> dict:
             out.update(json.loads(stored))
         except ValueError:
             pass
+    # Offsets saved before the door line went to three stages still name the
+    # old ones; only the current stages after the first get an offset.
+    saved = out.get("stage_offsets") or {}
+    out["stage_offsets"] = {st: saved.get(st, PLANNING_DEFAULTS["stage_offsets"].get(st, 0)) for st in STAGES[1:]}
+    if out.get("capacity_stage") and out["capacity_stage"] not in ALL_STAGES:
+        out["capacity_stage"] = ""
     return out
 
 
@@ -2495,7 +2499,9 @@ def api_efficiency(date_from: str, date_to: str):
 
     # earned — the estimated time of what was ticked that day
     for ev in get_progress_events(date_from, date_to):
-        if ev["delta"] <= 0:
+        # A stage the door line no longer runs has no minutes or hours to
+        # measure against, so its old ticks would only show as a blank row.
+        if ev["delta"] <= 0 or ev["stage"] not in ALL_STAGES:
             continue
         the_date = ev["at"][:10]
         if not (date_from <= the_date <= date_to):

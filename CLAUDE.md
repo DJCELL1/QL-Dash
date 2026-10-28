@@ -88,10 +88,10 @@ shows no purchase-order tracking, and `PC-10-Q` is mapped to a display name in
 
 ## Door stages
 
-The aluminium door line runs five stages, in this order, and every door runs
+The aluminium door line runs three stages, in this order, and every door runs
 all of them:
 
-`cut_to_size` -> `machining` -> `components` -> `build` -> `wrap`
+`picking` -> `machining` -> `build_wrap` (shown as Picking, Machining, Build/Wrap)
 
 They are declared once in `STAGES` / `STAGE_LABELS` (`backend/app.py`) and
 mirrored in `FACTORY_STAGES` / `STAGE_LABELS` (`frontend/app.js`) and
@@ -105,7 +105,14 @@ The WA line's stages (`make`, `press`, `cnc`, `glazing`, `edge_strip`,
 `finish`) are out of the flow, but their columns stay in the table and in
 `STAGE_COLUMNS` so a database carrying that history still reads back. WA also
 picked two optional stages per job from markers in the item description; that
-branch is gone, and `_stages_for()` now returns the same five every time.
+branch is gone, and `_stages_for()` now returns the same three every time.
+
+The line used to run five stages (`cut_to_size`, `machining`, `components`,
+`build`, `wrap`). Their columns stay too. `_merge_door_stages()` in `db.py`
+folded them in once, when `picking_done` was first added: Cut to size became
+Picking; Components, Build and Wrap became Build/Wrap (progress from
+`wrap_done`, bookings from Build's day, minutes and actual hours summed). Old
+ticks logged under Build and Components were left as they were.
 
 ## The three floor lines
 
@@ -114,7 +121,7 @@ its own endpoint pair and its own columns in `stage_progress`:
 
 | Line | Stages | Reads | Progress endpoint |
 |---|---|---|---|
-| Doors | the five above | `joinery` | `/api/factory/progress` |
+| Doors | the three above | `joinery` | `/api/factory/progress` |
 | Cavities | `cav_prep`, `cav_make` | `cavities` | `/api/cavities/progress` |
 | Powdercoating | `pc_prep`, `pc_coat`, `pc_pack` | `subcontractors` | `/api/powdercoat/progress` |
 

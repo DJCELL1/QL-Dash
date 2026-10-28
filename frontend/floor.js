@@ -11,14 +11,12 @@
   const $ = (sel) => document.querySelector(sel);
 
   const STAGE_LABELS = {
-    cut_to_size: "Cut to size",
+    picking: "Picking",
     machining: "Machining",
-    components: "Components",
-    build: "Build",
-    wrap: "Wrap",
+    build_wrap: "Build/Wrap",
   };
 
-  const FALLBACK_STAGES = ["cut_to_size", "machining", "components", "build", "wrap"];
+  const FALLBACK_STAGES = ["picking", "machining", "build_wrap"];
 
   // Glazing and edge stripping only apply to doors whose description carries
   // the marker, so the server sends each job its own list and the card follows
@@ -152,7 +150,7 @@
 
     // Headline for the wall screen — the two numbers worth reading from across
     // the room: how many doors are on today, and how many are through Make.
-    const made = rows.reduce((s, r) => s + Math.min(doneFor(r, "cut_to_size"), r.total_qty || 0), 0);
+    const made = rows.reduce((s, r) => s + Math.min(doneFor(r, FALLBACK_STAGES[0]), r.total_qty || 0), 0);
     $("#headline").textContent = rows.length
       ? `${num(made)} of ${num(doors)} made`
       : "";
@@ -326,7 +324,7 @@
       const st = stagesOf(row);
       const sum = st.reduce((t, s) => t + doneFor(row, s.key), 0);
       row.pct_complete = total > 0 ? Math.round((sum / (total * st.length)) * 1000) / 10 : 0;
-      row.status = total > 0 && doneFor(row, "wrap") >= total ? "completed" : "in_production";
+      row.status = total > 0 && doneFor(row, FALLBACK_STAGES[FALLBACK_STAGES.length - 1]) >= total ? "completed" : "in_production";
 
       const label = STAGE_LABELS[stage] || stage;
       toast(`${row.prod_order_no} · ${label} ${num(doneFor(row, stage))} of ${num(total)}`, "good");

@@ -161,8 +161,11 @@ CREATE TABLE IF NOT EXISTS product_minutes (
 
 CREATE TABLE IF NOT EXISTS stage_progress (
     prod_order_no TEXT PRIMARY KEY,
-    cut_to_size_done REAL NOT NULL DEFAULT 0,
+    picking_done REAL NOT NULL DEFAULT 0,
     machining_done REAL NOT NULL DEFAULT 0,
+    build_wrap_done REAL NOT NULL DEFAULT 0,
+    -- The earlier five-stage Queensland line, merged into the three above.
+    cut_to_size_done REAL NOT NULL DEFAULT 0,
     components_done REAL NOT NULL DEFAULT 0,
     build_done REAL NOT NULL DEFAULT 0,
     wrap_done REAL NOT NULL DEFAULT 0,
@@ -308,8 +311,11 @@ CREATE TABLE IF NOT EXISTS sub_job_status (
 
 STAGE_COLUMNS = {
     # The Queensland aluminium door line, in shop order.
-    "cut_to_size": "cut_to_size_done",
+    "picking": "picking_done",
     "machining": "machining_done",
+    "build_wrap": "build_wrap_done",
+    # Its earlier five stages, kept so progress recorded under them reads back.
+    "cut_to_size": "cut_to_size_done",
     "components": "components_done",
     "build": "build_done",
     "wrap": "wrap_done",
@@ -355,7 +361,8 @@ def _add_missing_columns(conn) -> None:
     for column in ("glazing_done", "edge_strip_done", "cav_prep_done", "cav_make_done",
                    "cut_to_size_done", "machining_done", "components_done",
                    "build_done", "wrap_done",
-                   "pc_prep_done", "pc_coat_done", "pc_pack_done"):
+                   "pc_prep_done", "pc_coat_done", "pc_pack_done",
+                   "picking_done", "build_wrap_done"):
         if column not in have:
             conn.execute(f"ALTER TABLE stage_progress ADD COLUMN {column} REAL NOT NULL DEFAULT 0")
             added.append(column)
@@ -365,6 +372,37 @@ def _add_missing_columns(conn) -> None:
     # than stranding it in a column nothing reads.
     if "cav_prep_done" in added and "cavity_done" in have:
         conn.execute("UPDATE stage_progress SET cav_prep_done = cavity_done WHERE cavity_done > 0")
+
+    # The door line went from five stages to three. The new columns appearing is
+    # the one moment to carry the old stages' history across.
+    if "picking_done" in added:
+        _merge_door_stages(conn)
+
+
+def _merge_door_stages(conn) -> None:
+    """Fold the five-stage door line into Picking, Machining and Build/Wrap.
+
+    Cut to size becomes Picking. Components, Build and Wrap become Build/Wrap:
+    a door counts as through it once it was wrapped, it is booked on the day
+    Build was, and its minutes and actual hours are the three added together.
+    Ticks already logged under Build and Components stay as they were, since
+    re-labelling them would count the same door's time two or three times.
+    """
+    conn.execute("UPDATE stage_progress SET picking_done = cut_to_size_done, build_wrap_done = wrap_done")
+    for table, key, value in (("product_minutes", "product_group", "minutes"),
+                              ("actual_hours", "the_date", "hours")):
+        conn.execute(
+            f"INSERT OR REPLACE INTO {table} ({key}, stage, {value}, updated_at) "
+            f"SELECT {key}, 'build_wrap', SUM({value}), MAX(updated_at) FROM {table} "
+            "WHERE stage IN ('components', 'build', 'wrap') GROUP BY {key}".replace("{key}", key)
+        )
+    for table in ("product_minutes", "actual_hours", "work_hours", "day_overrides",
+                  "schedule_entries", "day_plan_lines"):
+        conn.execute(f"UPDATE OR IGNORE {table} SET stage = 'picking' WHERE stage = 'cut_to_size'")
+        conn.execute(f"UPDATE OR IGNORE {table} SET stage = 'build_wrap' WHERE stage = 'build'")
+        conn.execute(f"DELETE FROM {table} WHERE stage IN ('cut_to_size', 'components', 'build', 'wrap')")
+    conn.execute("UPDATE progress_events SET stage = 'picking' WHERE stage = 'cut_to_size'")
+    conn.execute("UPDATE progress_events SET stage = 'build_wrap' WHERE stage = 'wrap'")
 
 
 @contextmanager

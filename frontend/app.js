@@ -55,9 +55,7 @@
     schedule: { entries: [], dayPlans: {}, priorities: {} },
     scheduleOffsets: {
       machining: Number(localStorage.getItem("scheduleOffsetMachining")) || 0,
-      components: Number(localStorage.getItem("scheduleOffsetComponents")) || 1,
-      build: Number(localStorage.getItem("scheduleOffsetBuild")) || 1,
-      wrap: Number(localStorage.getItem("scheduleOffsetWrap")) || 1,
+      build_wrap: Number(localStorage.getItem("scheduleOffsetBuild_wrap")) || 1,
     },
     scheduleWindowStart: null,
   };
@@ -480,18 +478,16 @@
     const f = state.factoryByPro.get(rec.prod_order_no);
     if (!f) return '<span class="cell-muted">—</span>';
     const stages = [
-      ["1", "cut_to_size"],
+      ["1", "picking"],
       ["2", "machining"],
-      ["3", "components"],
-      ["4", "build"],
-      ["5", "wrap"],
+      ["3", "build_wrap"],
     ];
     const dots = stages
       .map(([label, key]) => {
         const done = f[`${key}_done`] || 0;
         const total = f.total_qty || 0;
         const cls = total > 0 && done >= total ? "stage-dot-complete" : done > 0 ? "stage-dot-partial" : "stage-dot-pending";
-        return `<span class="stage-dot ${cls}" title="${label === "M" ? "Make" : label === "P" ? "Press" : label === "C" ? "CNC" : "Finish"}: ${fmtNum(done)} / ${fmtNum(total)}">${label}</span>`;
+        return `<span class="stage-dot ${cls}" title="${stageLabel(key)}: ${fmtNum(done)} / ${fmtNum(total)}">${label}</span>`;
       })
       .join("");
     return `<div class="factory-mini"><span class="stage-dots">${dots}</span><span class="progress-pct">${f.pct_complete.toFixed(0)}%</span></div>`;
@@ -874,7 +870,7 @@
         customer: r.source_name,
         item: r.item_summary,
         due_date: r.due_date,
-        remaining: Math.max(0, (r.total_qty || 0) - (r.cut_to_size_done || 0)),
+        remaining: Math.max(0, (r.total_qty || 0) - (r.picking_done || 0)),
       }))
       .filter((j) => j.remaining > 0.001);
   }
@@ -2040,9 +2036,9 @@
   // only to doors whose description carries the marker, so each job carries its
   // own subset in row.stages and the table shows those columns only when some
   // job on screen actually needs them.
-  const FACTORY_STAGES = ["cut_to_size", "machining", "components", "build", "wrap"];
+  const FACTORY_STAGES = ["picking", "machining", "build_wrap"];
   const BASE_FACTORY_STAGES = FACTORY_STAGES;
-  // Every door runs all five, so nothing is conditional on this line.
+  // Every door runs all three, so nothing is conditional on this line.
   const OPTIONAL_FACTORY_STAGES = [];
 
   // Powdercoating is coated in house, so the floor ticks it off too.
@@ -2095,10 +2091,10 @@
       data: state.data.factory,
       rows: factoryRows(),
       stages: FACTORY_STAGES,
-      finalStage: "wrap",
+      finalStage: FACTORY_STAGES[FACTORY_STAGES.length - 1],
       progressUrl: "/api/factory/progress",
       unit: ["door", "doors"],
-      stagesText: "Cut to size, Machining, Components, Build and Wrap",
+      stagesText: "Picking, Machining and Build/Wrap",
       exportName: "Production Scheduler export (Aluminium doors)",
       labels: true,
     };
@@ -2186,8 +2182,8 @@
     return s.charAt(0).toUpperCase() + s.slice(1);
   }
 
-  const STAGE_LABELS = { cut_to_size: "Cut to size", machining: "Machining",
-    components: "Components", build: "Build", wrap: "Wrap",
+  const STAGE_LABELS = { picking: "Picking", machining: "Machining", build_wrap: "Build/Wrap",
+    cut_to_size: "Cut to size", components: "Components", build: "Build", wrap: "Wrap",
     cav_prep: "Prep", cav_make: "Make",
     pc_prep: "Prep", pc_coat: "Coat", pc_pack: "Pack" };
   function stageLabel(stage) {
@@ -2648,14 +2644,12 @@
 
   // ---------- scheduling board ----------
 
-  // All five stages are planned here. Cut to size carries the capacity check,
+  // All three stages are planned here. Picking carries the capacity check,
   // so doors/workday means what can be started in a day.
   const ALL_SCHEDULE_SECTIONS = [
-    { id: "cut_to_size", label: "Cut to size", stages: ["cut_to_size"], capacityCheck: true },
+    { id: "picking", label: "Picking", stages: ["picking"], capacityCheck: true },
     { id: "machining", label: "Machining", stages: ["machining"], capacityCheck: false },
-    { id: "components", label: "Components", stages: ["components"], capacityCheck: false },
-    { id: "build", label: "Build", stages: ["build"], capacityCheck: false },
-    { id: "wrap", label: "Wrap", stages: ["wrap"], capacityCheck: false },
+    { id: "build_wrap", label: "Build/Wrap", stages: ["build_wrap"], capacityCheck: false },
   ];
 
   // Glazing is only some doors, so the row earns its place only when a job on
@@ -2703,7 +2697,7 @@
 
     const explicitMakeQty = new Map();
     for (const e of state.schedule.entries) {
-      if (e.stage !== "cut_to_size") continue;
+      if (e.stage !== FACTORY_STAGES[0]) continue;
       explicitMakeQty.set(e.prod_order_no, (explicitMakeQty.get(e.prod_order_no) || 0) + e.qty);
     }
 
@@ -2711,7 +2705,7 @@
       .filter((r) => r.status !== "completed")
       .map((r) => {
         const already = explicitMakeQty.get(r.prod_order_no) || 0;
-        const remaining = Math.max(0, (r.total_qty || 0) - (r.cut_to_size_done || 0) - already);
+        const remaining = Math.max(0, (r.total_qty || 0) - (r.picking_done || 0) - already);
         const idealStart = r.due_date ? addBusinessDays(new Date(r.due_date), -leadTimeDays) : today0;
         return { pro: r.prod_order_no, due: r.due_date, qty: remaining, idealStart };
       })
@@ -2828,7 +2822,7 @@
           // Dragged into Holding: a deliberate "not yet", so it waits — and
           // everything downstream waits with it.
           stageDateKey = HOLDING_DATE;
-        } else if (stage === "cut_to_size") {
+        } else if (stage === FACTORY_STAGES[0]) {
           // Work nobody has scheduled yet waits in Holding rather than being
           // scattered across days on a guess — you decide what runs when, and
           // the days only ever show work someone actually committed to.
@@ -2875,7 +2869,7 @@
 
   // The badge on a schedule card. Derived from the stage order rather than
   // written out, so adding or reordering a stage can't leave it stale — and
-  // positions beat initials here, since Cut to size and Components share one.
+  // positions beat initials here, since a label like Build/Wrap has no one letter.
   const STAGE_TAG_LETTER = Object.fromEntries(FACTORY_STAGES.map((s, i) => [s, String(i + 1)]));
 
   // How far through this stage the job is, straight from Factory floor entries.
@@ -3352,8 +3346,7 @@
   }
 
   function wireScheduleOffsetInputs() {
-    const map = { machining: "#offset-machining", components: "#offset-components",
-                  build: "#offset-build", wrap: "#offset-wrap" };
+    const map = { machining: "#offset-machining", build_wrap: "#offset-build_wrap" };
     Object.entries(map).forEach(([key, sel]) => {
       const input = $(sel);
       input.value = state.scheduleOffsets[key];
