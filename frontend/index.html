@@ -113,8 +113,47 @@
 
     <section class="view" id="view-subcontractors" hidden>
       <div class="segmented" id="sub-view-toggle">
-        <button class="segmented-btn" data-mode="board">Scheduling board</button>
+        <button class="segmented-btn" data-mode="schedule">Day schedule</button>
+        <button class="segmented-btn" data-mode="board">Status lanes</button>
         <button class="segmented-btn" data-mode="list">Order list</button>
+      </div>
+      <div class="sub-error" id="subboard-error" hidden></div>
+      <input type="color" id="pc-colour-picker" class="pc-colour-picker" tabindex="-1" aria-hidden="true">
+
+      <div id="sub-schedule" hidden>
+        <div class="chart-card-head schedule-head">
+          <h2>Powdercoat schedule</h2>
+          <span class="updated-at" id="pcs-updated"></span>
+        </div>
+        <p class="leveling-note">Jobs gather by colour, the biggest batch first. Drag a colour, or a single job, from Holding onto a day and into where it's up to. Moving it down the day changes that as it goes. Click a colour tile to set or correct its colour. Every job in that colour follows.</p>
+        <div class="schedule-nav">
+          <button class="btn" id="pcs-prev">‹ Prev</button>
+          <span id="pcs-range"></span>
+          <button class="btn" id="pcs-next">Next ›</button>
+          <button class="btn" id="pcs-today">Today</button>
+          <span class="pc-behind" id="pcs-behind"></span>
+        </div>
+        <div class="schedule-layout" id="pcs-layout">
+          <div class="schedule-holding">
+            <div class="schedule-holding-head">
+              <span>Holding</span>
+              <span class="schedule-holding-count" id="pcs-holding-count"></span>
+            </div>
+            <div class="pc-holding-tools">
+              <select id="pcs-holding-sort" title="How Holding is ordered">
+                <option value="colour">By colour, most jobs first</option>
+                <option value="eta">By ETA</option>
+                <option value="due">By due date</option>
+              </select>
+              <select id="pcs-holding-colour" title="Show one colour only"></select>
+            </div>
+            <input type="search" class="holding-search" id="pcs-holding-search"
+                   placeholder="Find SO, PRO or colour…" autocomplete="off" spellcheck="false">
+            <div class="schedule-dropzone pcs-dropzone schedule-holding-zone" data-date="holding" id="pcs-holding-zone"></div>
+          </div>
+          <div class="schedule-board" id="pcs-board"></div>
+        </div>
+        <div class="empty-state" id="pcs-empty" hidden></div>
       </div>
 
       <div id="sub-board" hidden>
@@ -122,7 +161,6 @@
           <input type="search" class="search-input" id="subboard-search" placeholder="Search PRO, order, customer, item…">
           <span class="updated-at" id="subboard-updated"></span>
         </div>
-        <div class="sub-error" id="subboard-error" hidden></div>
         <div id="sub-contractor-boards"></div>
       </div>
 
@@ -394,6 +432,13 @@ PRO-330659: L2.02, L2.02, L2.03, L2.03</pre>
           <span class="settings-saved" id="minutes-saved"></span>
         </div>
         <div class="table-wrap"><table class="data-table" id="settings-minutes"><thead></thead><tbody></tbody></table></div>
+      </div>
+
+      <div class="chart-card">
+        <h2>POWDER COLOURS.</h2>
+        <p class="leveling-note" id="powder-library-note"></p>
+        <p class="leveling-note">Colours set by hand from a tile on the powdercoat schedule. These beat the colour charts. Remove one to go back to the chart's colour.</p>
+        <div class="table-wrap"><table class="data-table" id="settings-powder-colours"><thead></thead><tbody></tbody></table></div>
       </div>
 
       <div class="chart-card">

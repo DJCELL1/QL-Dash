@@ -66,11 +66,14 @@ from db import (
 from db import (
     count_admins,
     count_users,
+    delete_powder_colour,
     delete_user,
     first_account,
     forget_door_numbers,
     get_all_door_numbers,
     get_all_sales_orders,
+    get_powder_colours,
+    set_powder_colour,
     set_sales_orders,
     get_setting,
     get_user,
@@ -82,6 +85,7 @@ from db import (
     upsert_user,
 )
 import auth
+import colours
 from ingest import SUPPORTED_EXTENSIONS, file_kind, ingest_file
 from watcher import scan_folder, start_watcher
 
@@ -1570,6 +1574,7 @@ def api_subcontractors():
     records = snap["records"]
     stored = get_all_sub_status()
     purchase_orders = get_all_purchase_orders()
+    matcher = colours.Matcher(get_powder_colours())
 
     # one card per (PRO, work centre) — BC repeats a row per routing operation
     jobs: dict[tuple[str, str], dict] = {}
@@ -1591,7 +1596,9 @@ def api_subcontractors():
                 "source_name": r.get("source_name"),
                 "item_no": r.get("item_no"),
                 "item_description": r.get("item_description"),
+                "colour_code": r.get("colour_code"),
                 "colour_description": r.get("colour_description"),
+                "colour": matcher.match(r.get("colour_code"), r.get("colour_description")),
                 "sub_po": r.get("comments"),
                 "eta_note": r.get("potential_back_order_comment"),
                 "due_date": r.get("operation_due_date"),
@@ -1607,6 +1614,7 @@ def api_subcontractors():
                 "eta_date": saved.get("eta_date"),
                 "priority": saved.get("priority", 2),
                 "note": saved.get("note"),
+                "scheduled_date": saved.get("scheduled_date"),
             }
         else:
             # keep the earliest due date and worst-case flags across the PRO's lines
@@ -1676,6 +1684,8 @@ class SubStatusUpdate(BaseModel):
     # priority doubles as the manual running order within a lane: 1 = do first
     priority: int | None = Field(default=None, ge=1)
     note: str | None = None
+    # a YYYY-MM-DD day on the powdercoat schedule, or "holding" to take it off
+    scheduled_date: str | None = None
 
 
 @app.post("/api/subcontractors/status")
@@ -1684,6 +1694,14 @@ def api_sub_status(request: Request, update: SubStatusUpdate):
         raise HTTPException(status_code=400, detail=f"status must be one of {', '.join(SUB_STATUSES)}")
 
     fields = {k: v for k, v in update.model_dump().items() if k not in ("prod_order_no", "work_centre_no") and v is not None}
+    if "scheduled_date" in fields:
+        if fields["scheduled_date"] == HOLDING_DATE:
+            fields["scheduled_date"] = None
+        else:
+            try:
+                date.fromisoformat(fields["scheduled_date"])
+            except ValueError:
+                raise HTTPException(status_code=400, detail="scheduled_date must be YYYY-MM-DD or holding.")
     if not fields:
         raise HTTPException(status_code=400, detail="Nothing to update")
 
@@ -1721,6 +1739,46 @@ def api_sub_reorder(request: Request, body: SubReorder):
         updated += 1
     write_audit(actor(request), "sub.reorder", f"{updated} jobs renumbered")
     return {"updated": updated}
+
+
+# ---------- powder colours ----------
+
+
+class PowderColourIn(BaseModel):
+    code: str = ""
+    name: str
+    hex: str
+    brand: str = ""
+
+
+@app.get("/api/powder-colours")
+def api_powder_colours():
+    lib = colours.library()
+    brands: dict[str, int] = {}
+    for c in lib:
+        brands[c["brand"] or "Other"] = brands.get(c["brand"] or "Other", 0) + 1
+    return {"library_count": len(lib), "library_brands": brands, "manual": get_powder_colours()}
+
+
+@app.post("/api/powder-colours")
+def api_set_powder_colour(request: Request, body: PowderColourIn):
+    if not re.fullmatch(r"#[0-9a-fA-F]{6}", body.hex):
+        raise HTTPException(status_code=400, detail="hex must look like #1A2B3C.")
+    key = colours.colour_key(body.code, body.name)
+    if not key:
+        raise HTTPException(status_code=400, detail="A colour needs a code or a name.")
+    row = set_powder_colour(key, body.name.strip(), body.hex.upper(), body.code.strip(), body.brand.strip(),
+                            actor(request))
+    write_audit(actor(request), "powder_colour.set", f"{body.code or body.name} = {body.hex}")
+    return row
+
+
+@app.delete("/api/powder-colours/{colour_key}")
+def api_delete_powder_colour(request: Request, colour_key: str):
+    if not delete_powder_colour(colour_key):
+        raise HTTPException(status_code=404, detail="No colour set by hand under that key.")
+    write_audit(actor(request), "powder_colour.delete", colour_key)
+    return {"deleted": colour_key}
 
 
 @app.get("/floor")

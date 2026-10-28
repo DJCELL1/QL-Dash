@@ -2301,3 +2301,74 @@ body.is-gantt-open { overflow: hidden; }
 .wm-paste { width: 100%; font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size: 12px; }
 
 .wm-flag.is-empty { opacity: 0.4; font-weight: 600; }
+
+/* ---------- powdercoat colours ---------- */
+
+/* A swatch is the colour itself, so it keeps a border to stay visible when the
+   colour is close to the card behind it (white on white). */
+.pc-swatch {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+.pc-swatch-sm { width: 16px; height: 16px; }
+.pc-swatch-lg { width: 34px; height: 34px; border-radius: 6px; }
+.pc-swatch.is-unknown {
+  background: repeating-linear-gradient(45deg, var(--page-plane) 0 4px, var(--gridline) 4px 8px);
+}
+.pc-swatch:hover { box-shadow: 0 0 0 2px var(--series-1); }
+.pc-colour-picker { position: absolute; width: 0; height: 0; opacity: 0; pointer-events: none; }
+
+.pc-card-colour { display: flex; align-items: center; gap: 8px; margin: 6px 0 4px; }
+.pc-card-colour-text { min-width: 0; }
+.pc-card-colour-name { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pc-group-name { font-weight: 700; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.pc-group-count { padding-left: 38px; font-size: 11px; color: var(--text-muted); }
+.pc-day-colours { margin-left: auto; font-size: 11px; color: var(--text-muted); }
+.pc-behind { font-size: 12px; font-weight: 600; color: var(--status-critical); }
+
+.pc-holding-tools { display: flex; flex-direction: column; gap: 6px; padding: 8px 8px 0; }
+.pc-holding-tools select {
+  width: 100%;
+  padding: 5px 7px;
+  font-size: 12px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--page-plane);
+  color: var(--text-primary);
+}
+
+.pc-status {
+  display: inline-block;
+  margin-top: 5px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+}
+.pc-status-waiting_material { color: var(--status-critical); border-color: color-mix(in srgb, var(--status-critical) 45%, transparent); }
+
+.pc-print-swatch {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  margin-right: 6px;
+  vertical-align: -2px;
+  border: 1px solid #000;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}

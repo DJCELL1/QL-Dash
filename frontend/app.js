@@ -7,7 +7,9 @@
     // the Upload button instead. Assumed true until /api/status says otherwise.
     hasWatchFolder: true,
     huddle: false, // full-screen morning-meeting view of the schedule
-    holdingSearch: { schedule: "", cavities: "" },
+    holdingSearch: { schedule: "", cavities: "", pcs: "" },
+    // powdercoat day schedule: week shown, how Holding is sorted, colour filter
+    pcs: { windowStart: null, sort: localStorage.getItem("pcsHoldingSort") || "colour", colour: "", wired: false },
     user: null,        // signed-in username, null for a reader
     anyAccounts: true, // false means nobody can sign in yet
     isAdmin: false,    // admins keep the door numbers
@@ -37,7 +39,7 @@
           ? localStorage.getItem("factoryLine")
           : "doors",
       },
-      subboard: { search: "", chips: new Set(), viewMode: localStorage.getItem("subViewMode") || "board" },
+      subboard: { search: "", chips: new Set(), viewMode: localStorage.getItem("pcViewMode") || "schedule" },
     },
     expanded: new Set(),
     selectedGroups: new Set(),
@@ -1570,7 +1572,8 @@
     const q = search.trim().toLowerCase();
     if (!q) return jobs;
     return jobs.filter((j) =>
-      [j.prod_order_no, j.sales_order_no, j.source_name, j.item_description, j.sub_po, j.colour_description]
+      [j.prod_order_no, j.sales_order_no, j.source_name, j.item_description, j.sub_po, j.colour_description,
+        j.colour && j.colour.name, j.colour && j.colour.code]
         .filter(Boolean)
         .some((v) => String(v).toLowerCase().includes(q))
     );
@@ -1629,7 +1632,7 @@
       }
     }
     await loadSubBoard();
-    renderSubBoard();
+    renderSubcontractors();
 
     if (failures.length) {
       console.error(failures);
@@ -1836,6 +1839,349 @@
     wireSubBoardInteractions();
   }
 
+  // ---------- powdercoat day schedule ----------
+  //
+  // The same shape as the door schedule: Holding on the left, the working week
+  // across, and each day split into the four places a job can be. Inside a
+  // section jobs gather by colour, biggest batch first, because a colour change
+  // is what costs time on the line.
+
+  const PCS_WINDOW_DAYS = 5;
+  const PCS_LANE_LABELS = Object.fromEntries(SUB_LANES.map((l) => [l.id, l.label]));
+
+  function pcsColourKey(j) {
+    if (j.colour) return j.colour.key;
+    const d = (j.colour_description || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+    return d ? "desc:" + d : "none";
+  }
+
+  function pcsColourName(j) {
+    if (j.colour) return j.colour.name;
+    return j.colour_description || "No colour given";
+  }
+
+  function pcsColourDetail(j) {
+    if (j.colour) return [j.colour.brand, j.colour.code].filter(Boolean).join(" · ");
+    return j.colour_description ? "Not in the colour charts — click the tile to set it" : "";
+  }
+
+  // The tile. A colour nobody has matched draws hatched with a "?" so it can't
+  // pass for a real swatch. Clicking any tile sets the colour by hand, keyed on
+  // what BC calls it, so every job in that colour picks it up.
+  function pcsSwatchHTML(j, size) {
+    const hex = j.colour && j.colour.hex;
+    return `<button type="button" class="pc-swatch pc-swatch-${size}${hex ? "" : " is-unknown"}"${hex ? ` style="background:${hex}"` : ""}
+      draggable="false" data-colour-code="${escapeAttr(j.colour_code || "")}"
+      data-colour-name="${escapeAttr(j.colour_description || (j.colour ? j.colour.name : ""))}"
+      data-colour-hex="${hex || ""}"
+      title="${escapeAttr(pcsColourName(j))}${hex ? " · " + hex : ""} — click to set the colour">${hex ? "" : "?"}</button>`;
+  }
+
+  function pcsCardHTML(j, showStatus) {
+    const due = j.due_date
+      ? j.overdue
+        ? `<span class="text-critical">Due ${fmtDate(j.due_date)}</span>`
+        : `Due ${fmtDate(j.due_date)}`
+      : "No due date";
+    const eta = j.eta_date ? ` · ETA ${fmtDate(j.eta_date)}` : "";
+    return `<div class="sub-card pc-card" draggable="true" data-pro="${j.prod_order_no}" data-wc="${j.work_centre_no}">
+      <div class="sub-card-top">
+        <span class="sub-card-pro">${j.prod_order_no}</span>
+        <span class="sub-card-so">${soLabel(j.sales_order_no)}</span>
+        <span class="sub-card-qty">${fmtNum(j.remaining_qty || j.qty)} ${j.uom || "EA"}</span>
+      </div>
+      <div class="pc-card-colour">
+        ${pcsSwatchHTML(j, "lg")}
+        <div class="pc-card-colour-text">
+          <div class="pc-card-colour-name">${escapeAttr(pcsColourName(j))}</div>
+          <div class="sub-card-muted">${escapeAttr(pcsColourDetail(j))}</div>
+        </div>
+      </div>
+      <div class="sub-card-line">${customerLabel(j.source_name)}</div>
+      <div class="sub-card-muted">${j.item_description || ""}</div>
+      <div class="sub-card-muted">${due}${eta}</div>
+      ${showStatus ? `<span class="pc-status pc-status-${j.status}">${PCS_LANE_LABELS[j.status] || j.status}</span>` : ""}
+    </div>`;
+  }
+
+  const pcsByDue = (a, b) =>
+    (a.due_date || "9999-99-99").localeCompare(b.due_date || "9999-99-99") || a.prod_order_no.localeCompare(b.prod_order_no);
+  const pcsByEta = (a, b) =>
+    (a.eta_date || a.due_date || "9999-99-99").localeCompare(b.eta_date || b.due_date || "9999-99-99") || pcsByDue(a, b);
+
+  // Colour batches, the biggest first: the batch is the unit a day is planned in.
+  function pcsColourGroups(jobs) {
+    const groups = new Map();
+    for (const j of jobs) {
+      const k = pcsColourKey(j);
+      if (!groups.has(k)) groups.set(k, []);
+      groups.get(k).push(j);
+    }
+    return Array.from(groups.entries())
+      .map(([key, list]) => ({ key, jobs: list.sort(pcsByDue) }))
+      .sort((a, b) => b.jobs.length - a.jobs.length || pcsColourName(a.jobs[0]).localeCompare(pcsColourName(b.jobs[0])));
+  }
+
+  function pcsGroupsHTML(jobs, zoneKey, showStatus) {
+    return pcsColourGroups(jobs)
+      .map(({ key, jobs: list }) => {
+        const groupKey = `pcs:${zoneKey}|${key}`;
+        const open = state.expanded.has(groupKey);
+        const payload = list.map((j) => ({ pro: j.prod_order_no, wc: j.work_centre_no }));
+        const first = list[0];
+        return `<div class="schedule-group pc-group">
+          <div class="schedule-group-head pc-group-head" draggable="true" data-group-key="${escapeAttr(groupKey)}"
+               data-group-jobs="${escapeAttr(JSON.stringify(payload))}"
+               title="Drag to move all ${list.length} ${escapeAttr(pcsColourName(first))} job${list.length === 1 ? "" : "s"} together">
+            <div class="schedule-group-top">
+              <span class="schedule-group-chevron">${open ? "▾" : "▸"}</span>
+              ${pcsSwatchHTML(first, "sm")}
+              <span class="pc-group-name">${escapeAttr(pcsColourName(first))}</span>
+            </div>
+            <div class="pc-group-count">${list.length} job${list.length === 1 ? "" : "s"} · ${fmtQtyTotals(list)}</div>
+            ${list.some((j) => j.overdue) ? '<div class="sub-group-flag text-critical">Overdue</div>' : ""}
+          </div>
+          ${open ? `<div class="schedule-group-body">${list.map((j) => pcsCardHTML(j, showStatus)).join("")}</div>` : ""}
+        </div>`;
+      })
+      .join("");
+  }
+
+  // Holding is the work still to plan: anything not on a day and not coated.
+  const pcsHeld = (jobs) => jobs.filter((j) => !j.scheduled_date && j.status !== "ready");
+
+  function renderPcsSchedule() {
+    const data = state.data.subBoard;
+    const emptyEl = $("#pcs-empty");
+    const layout = $("#pcs-layout");
+    if (!data || !data.jobs) {
+      emptyEl.hidden = false;
+      emptyEl.textContent = noDataMessage("powdercoating export");
+      layout.hidden = true;
+      $("#pcs-range").textContent = "";
+      return;
+    }
+    emptyEl.hidden = true;
+    layout.hidden = false;
+    $("#pcs-updated").textContent = `Planner as of ${fmtDate(data.as_of)}`;
+    wirePcsControls();
+
+    const all = data.jobs;
+
+    // ---- Holding
+    const held = pcsHeld(all);
+    const colourSel = $("#pcs-holding-colour");
+    const heldGroups = pcsColourGroups(held);
+    if (state.pcs.colour && !heldGroups.some((g) => g.key === state.pcs.colour)) state.pcs.colour = "";
+    colourSel.innerHTML = `<option value="">All colours (${heldGroups.length})</option>` +
+      heldGroups.map((g) => `<option value="${escapeAttr(g.key)}">${escapeAttr(pcsColourName(g.jobs[0]))} — ${g.jobs.length}</option>`).join("");
+    colourSel.value = state.pcs.colour;
+    $("#pcs-holding-sort").value = state.pcs.sort;
+
+    let shown = filterSubJobs(held, state.holdingSearch.pcs);
+    if (state.pcs.colour) shown = shown.filter((j) => pcsColourKey(j) === state.pcs.colour);
+    const zone = $("#pcs-holding-zone");
+    if (held.length === 0) {
+      zone.innerHTML = '<div class="schedule-holding-empty">Nothing waiting to be planned</div>';
+    } else if (shown.length === 0) {
+      zone.innerHTML = '<div class="schedule-holding-empty">Nothing in Holding matches</div>';
+    } else if (state.pcs.sort === "colour") {
+      zone.innerHTML = pcsGroupsHTML(shown, "holding", true);
+    } else {
+      zone.innerHTML = [...shown].sort(state.pcs.sort === "eta" ? pcsByEta : pcsByDue).map((j) => pcsCardHTML(j, true)).join("");
+    }
+    $("#pcs-holding-count").textContent =
+      shown.length === held.length ? `${held.length} job${held.length === 1 ? "" : "s"}` : `${shown.length} of ${held.length}`;
+
+    // ---- The week
+    if (!state.pcs.windowStart) state.pcs.windowStart = mostRecentOrSameMonday(new Date());
+    const days = [];
+    let d = nextOrSameBusinessDay(state.pcs.windowStart);
+    for (let i = 0; i < PCS_WINDOW_DAYS; i++) {
+      days.push(new Date(d));
+      d = addBusinessDays(d, 1);
+    }
+    const todayK = dateKey(nextOrSameBusinessDay(new Date()));
+    // A job left on a day that has gone by, still not coated, would otherwise
+    // sit out of sight behind the Prev button.
+    const behind = all.filter((j) => j.scheduled_date && j.scheduled_date.slice(0, 10) < todayK && j.status !== "ready").length;
+    $("#pcs-range").textContent = `${fmtDayDate(days[0])} – ${fmtDayDate(days[days.length - 1])}`;
+    $("#pcs-behind").textContent = behind ? `${behind} job${behind === 1 ? "" : "s"} on earlier days not coated yet` : "";
+
+    $("#pcs-board").innerHTML = days
+      .map((day) => {
+        const dKey = dateKey(day);
+        const dayJobs = all.filter((j) => j.scheduled_date && j.scheduled_date.slice(0, 10) === dKey);
+        const colourCount = new Set(dayJobs.filter((j) => j.status !== "ready").map(pcsColourKey)).size;
+        const sections = SUB_LANES.map((lane) => {
+          const laneJobs = dayJobs.filter((j) => j.status === lane.id);
+          return `<div class="schedule-stage-section pc-section-${lane.id}">
+            <div class="schedule-stage-label">${lane.label}${laneJobs.length ? " — " + fmtQtyTotals(laneJobs) : ""}</div>
+            <div class="schedule-dropzone pcs-dropzone" data-date="${dKey}" data-status="${lane.id}">${pcsGroupsHTML(laneJobs, dKey + "|" + lane.id, false)}</div>
+          </div>`;
+        }).join("");
+        return `<div class="schedule-day ${dKey === todayK ? "is-today" : ""}">
+          <div class="schedule-day-head">
+            <span class="day-label">${fmtDayDate(day)}</span>
+            <span class="pc-day-colours">${colourCount ? `${colourCount} colour${colourCount === 1 ? "" : "s"}` : ""}</span>
+            <button class="print-btn" type="button" data-pcs-print="${dKey}" title="Print this day">🖶</button>
+          </div>
+          ${sections}
+        </div>`;
+      })
+      .join("");
+
+    wirePcsBoard();
+  }
+
+  function wirePcsControls() {
+    if (state.pcs.wired) return;
+    state.pcs.wired = true;
+    wireHoldingSearch("#pcs-holding-search", "pcs", renderPcsSchedule);
+    $("#pcs-holding-sort").addEventListener("change", (e) => {
+      state.pcs.sort = e.target.value;
+      localStorage.setItem("pcsHoldingSort", state.pcs.sort);
+      renderPcsSchedule();
+    });
+    $("#pcs-holding-colour").addEventListener("change", (e) => {
+      state.pcs.colour = e.target.value;
+      renderPcsSchedule();
+    });
+    const shift = (n) => {
+      state.pcs.windowStart = addBusinessDays(state.pcs.windowStart || mostRecentOrSameMonday(new Date()), n);
+      renderPcsSchedule();
+    };
+    $("#pcs-prev").addEventListener("click", () => shift(-PCS_WINDOW_DAYS));
+    $("#pcs-next").addEventListener("click", () => shift(PCS_WINDOW_DAYS));
+    $("#pcs-today").addEventListener("click", () => {
+      state.pcs.windowStart = mostRecentOrSameMonday(new Date());
+      renderPcsSchedule();
+    });
+
+    const picker = $("#pc-colour-picker");
+    picker.addEventListener("change", async () => {
+      const { code, name } = picker.dataset;
+      try {
+        await postJSON("/api/powder-colours", { code, name, hex: picker.value });
+        await loadSubBoard();
+        renderSubcontractors();
+      } catch (err) {
+        if (!err.needsSignIn) notifyError(err, "Couldn't save that colour.");
+      }
+    });
+  }
+
+  function wirePcsBoard() {
+    $$("#sub-schedule .pc-card, #sub-schedule .pc-group-head").forEach((el) => {
+      el.addEventListener("dragstart", (e) => {
+        e.stopPropagation();
+        const jobs = el.dataset.groupJobs
+          ? JSON.parse(el.dataset.groupJobs)
+          : [{ pro: el.dataset.pro, wc: el.dataset.wc }];
+        e.dataTransfer.setData("text/plain", JSON.stringify({ jobs }));
+        e.dataTransfer.effectAllowed = "move";
+      });
+    });
+
+    $$("#sub-schedule .pc-group-head").forEach((head) => {
+      head.addEventListener("click", () => {
+        const key = head.dataset.groupKey;
+        if (state.expanded.has(key)) state.expanded.delete(key);
+        else state.expanded.add(key);
+        renderPcsSchedule();
+      });
+    });
+
+    $$("#sub-schedule .pc-swatch").forEach((sw) => {
+      sw.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const name = sw.dataset.colourName;
+        const code = sw.dataset.colourCode;
+        if (!name && !code) {
+          notifyError(null, "BC gives no colour for this job, so there's nothing to set a colour against.");
+          return;
+        }
+        const picker = $("#pc-colour-picker");
+        picker.dataset.name = name || code;
+        picker.dataset.code = code;
+        picker.value = sw.dataset.colourHex || "#808080";
+        if (picker.showPicker) picker.showPicker();
+        else picker.click();
+      });
+    });
+
+    $$("#sub-schedule .pcs-dropzone").forEach((zone) => {
+      zone.addEventListener("dragover", (e) => {
+        e.preventDefault();
+        zone.classList.add("is-dragover");
+      });
+      zone.addEventListener("dragleave", () => zone.classList.remove("is-dragover"));
+      zone.addEventListener("drop", async (e) => {
+        e.preventDefault();
+        zone.classList.remove("is-dragover");
+        let d;
+        try {
+          d = JSON.parse(e.dataTransfer.getData("text/plain"));
+        } catch (err) {
+          return;
+        }
+        const jobs = (d && d.jobs) || [];
+        if (!jobs.length) return;
+        // Holding keeps where a job is up to; a day sets both the day and that.
+        const fields = zone.dataset.date === HOLDING_DATE
+          ? { scheduled_date: HOLDING_DATE }
+          : { scheduled_date: zone.dataset.date, status: zone.dataset.status };
+        await saveSubStatus(jobs, fields);
+      });
+    });
+
+    $$("#sub-schedule .print-btn[data-pcs-print]").forEach((btn) => {
+      btn.addEventListener("click", () => printPcsDay(btn.dataset.pcsPrint));
+    });
+  }
+
+  function printPcsDay(dKey) {
+    const jobs = ((state.data.subBoard && state.data.subBoard.jobs) || [])
+      .filter((j) => j.scheduled_date && j.scheduled_date.slice(0, 10) === dKey && j.status !== "ready");
+    const dayDate = parseDateKey(dKey);
+    const now = new Date();
+    let html = printHeaderHTML(
+      "Powdercoat run sheet",
+      dayDate.toLocaleDateString(undefined, { weekday: "long", day: "2-digit", month: "long", year: "numeric" }),
+      [
+        `<strong>${fmtDayDate(dayDate)}</strong>`,
+        "Printed " + now.toLocaleDateString() + " " + now.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" }),
+      ]
+    );
+    for (const lane of SUB_LANES.filter((l) => l.id !== "ready")) {
+      const laneJobs = jobs.filter((j) => j.status === lane.id);
+      html += `<div class="print-stage-block"><h3>${lane.label} &nbsp;·&nbsp; ${laneJobs.length} job${laneJobs.length === 1 ? "" : "s"}, ${fmtQtyTotals(laneJobs)}</h3>`;
+      if (!laneJobs.length) {
+        html += '<div class="print-empty">Nothing planned</div></div>';
+        continue;
+      }
+      html += `<table class="print-table"><thead><tr><th class="col-seq">#</th><th>Colour</th><th>Order</th><th>Customer</th><th>Item</th>
+        <th class="col-num">Qty</th><th class="col-date">Due</th><th>Done ✓</th></tr></thead><tbody>`;
+      let n = 0;
+      for (const g of pcsColourGroups(laneJobs)) {
+        for (const j of g.jobs) {
+          n += 1;
+          const hex = j.colour && j.colour.hex;
+          html += `<tr><td class="col-seq">${n}</td>
+            <td><span class="pc-print-swatch"${hex ? ` style="background:${hex}"` : ""}></span>${escapeAttr(pcsColourName(j))}</td>
+            <td class="col-key">${j.prod_order_no}<span class="cell-sub">${soLabel(j.sales_order_no)}</span></td>
+            <td>${customerLabel(j.source_name)}</td><td>${j.item_description || "—"}</td>
+            <td class="col-num">${fmtNum(j.remaining_qty || j.qty)} ${j.uom || "EA"}</td>
+            <td class="col-date">${dueCellHTML(j)}</td><td class="col-tick"></td></tr>`;
+        }
+      }
+      html += "</tbody></table></div>";
+    }
+    html += printFooterHTML(["Coated by", "Date", "Checked by"]);
+    $("#print-sheet").innerHTML = html;
+    window.print();
+  }
+
   const RUN_SHEET_SECTIONS = [
     { id: "at_sub", label: "In production" },
     { id: "ready_despatch", label: "Material ready for manufacture" },
@@ -1948,7 +2294,7 @@
       btn.classList.toggle("is-active", btn.dataset.mode === state.filters.subboard.viewMode);
       btn.onclick = () => {
         state.filters.subboard.viewMode = btn.dataset.mode;
-        localStorage.setItem("subViewMode", btn.dataset.mode);
+        localStorage.setItem("pcViewMode", btn.dataset.mode);
         renderSubcontractors();
       };
     });
@@ -1956,10 +2302,15 @@
 
   function renderSubcontractors() {
     wireSubViewToggle();
-    const isBoard = state.filters.subboard.viewMode === "board";
-    $("#sub-board").hidden = !isBoard;
-    $("#sub-list").hidden = isBoard;
-    if (isBoard) {
+    const mode = state.filters.subboard.viewMode;
+    $("#sub-schedule").hidden = mode !== "schedule";
+    $("#sub-board").hidden = mode !== "board";
+    $("#sub-list").hidden = mode !== "list";
+    if (mode === "schedule") {
+      renderPcsSchedule();
+      return;
+    }
+    if (mode === "board") {
       renderSubBoard();
       return;
     }
@@ -5097,6 +5448,43 @@
     renderDaysTable();
     renderMinutesTable();
     renderPlanningGrid();
+    renderPowderColours();
+  }
+
+  async function renderPowderColours() {
+    let d;
+    try {
+      d = await fetchJSON("/api/powder-colours");
+    } catch (e) {
+      return;
+    }
+    const brands = Object.entries(d.library_brands || {}).map(([b, n]) => `${fmtNum(n)} ${escapeAttr(b)}`).join(", ");
+    $("#powder-library-note").textContent = d.library_count
+      ? `${fmtNum(d.library_count)} colours loaded from the colour charts (${brands}).`
+      : "No colour charts loaded yet, so only colours set by hand show a swatch.";
+    const table = $("#settings-powder-colours");
+    table.querySelector("thead").innerHTML =
+      "<tr><th></th><th>Colour in BC</th><th>Code</th><th>Hex</th><th>Set by</th><th></th></tr>";
+    table.querySelector("tbody").innerHTML = d.manual.length
+      ? d.manual.map((c) => `<tr>
+          <td><span class="pc-swatch pc-swatch-sm" style="background:${c.hex}"></span></td>
+          <td>${escapeAttr(c.name)}</td><td>${escapeAttr(c.code || "—")}</td><td>${c.hex}</td>
+          <td class="cell-muted">${escapeAttr(c.updated_by || "")}</td>
+          <td><button class="btn" data-colour-key="${escapeAttr(c.colour_key)}">Remove</button></td></tr>`).join("")
+      : '<tr><td colspan="6" class="cell-muted">None — click a colour tile on the powdercoat schedule to set one.</td></tr>';
+    $$("#settings-powder-colours [data-colour-key]").forEach((btn) => {
+      btn.onclick = async () => {
+        try {
+          await apiDelete("/api/powder-colours/" + encodeURIComponent(btn.dataset.colourKey));
+        } catch (err) {
+          if (!err.needsSignIn) notifyError(err, "Couldn't remove that colour.");
+          return;
+        }
+        state.data.subBoard = null;
+        loadSubBoard().catch(() => {});
+        renderPowderColours();
+      };
+    });
   }
 
   const BOARD_VIEWS = new Set(["scheduling", "cavities"]);

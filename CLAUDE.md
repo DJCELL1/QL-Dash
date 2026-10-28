@@ -137,6 +137,32 @@ Note that powdercoat jobs are measured in both EA and LTHS. Per-row totals are
 right, but the floor's aggregate "items" tile sums the two together, which the
 subcontractor board deliberately avoids (see `fmtQtyTotals`).
 
+## Powdercoat schedule and colours
+
+The Powdercoating tab opens on a **Day schedule** (`renderPcsSchedule()` in
+`app.js`): Holding, then the working week, each day split into the four
+statuses of `SUB_LANES`. Dropping a job on a day writes both
+`sub_job_status.scheduled_date` and its status in one call; dropping it in
+Holding clears the date and keeps the status. Holding is everything with no
+date that isn't Coated, sortable by colour batch (most jobs first), ETA
+(`eta_date`, else due) or due date. The older status lanes and the order list
+are the other two toggles.
+
+Jobs gather by colour everywhere on that board. `backend/colours.py` resolves a
+job's BC `colour_code` / `colour_description` to a swatch: a colour set by hand
+(`powder_colours` table, keyed by `colour_key()`) first, then a code in the
+library, then a library name found as whole words in the description, preferring
+the brand and finish the description mentions. One-word names (White, Black) only
+match a description that is just that name, and anything mentioning RAL is left
+unmatched, because neither chart covers RAL.
+
+The library is `backend/powder_colours.json`, 213 colours built from the Dulux
+Duralloy Solid Colour Range and Interpon D2525/D3020 Commercial Collection PDFs
+by `tools/extract_powder_colours.py`. Interpon prints RGB values. Dulux only has
+picture swatches, sampled from the images themselves, so they read slightly
+lighter than the paint. Clicking a tile sets a colour by hand; Settings lists
+and removes those.
+
 ## Settings
 
 `/api/settings` serves everything the planner can change, and four POST routes

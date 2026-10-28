@@ -1,0 +1,1709 @@
+{
+ "source": "Dulux Duralloy Solid Colour Range and Interpon D2525/D3020 Commercial Collection charts",
+ "colours": [
+  {
+   "brand": "Interpon",
+   "range": "Interpon D2525",
+   "code": "YA278A",
+   "name": "Pearl White",
+   "finish": "Matt",
+   "hex": "#F9FFFF"
+  },
+  {
+   "brand": "Interpon",
+   "range": "Interpon D2525",
+   "code": "YA075A",
+   "name": "Pearl White",
+   "finish": "Gloss",
+   "hex": "#ECF3F4"
+  },
+  {
+   "brand": "Interpon",
+   "range": "Interpon D2525",
+   "code": "YA196A",
+   "name": "Appliance White",
+   "finish": "Satin",
+   "hex": "#EEF3F0"
+  },
+  {
+   "brand": "Interpon",
+   "range": "Interpon D2525",
+   "code": "YL316I",
+   "name": "Oia Silky",
+   "finish": "Texture",
+   "hex": "#A4A09A"
+  },
+  {
+   "brand": "Interpon",
+   "range": "Interpon D2525",
+   "code": "YL258A",
+   "name": "Driftwood",
+   "finish": "Matt",
+   "hex": "#D0D5D2"
+  },
+  {
+   "brand": "Interpon",
+   "range": "Interpon D2525",
+   "code": "YY230A",
+   "name": "Silver Pearl",
+   "finish": "Matt",
+   "hex": "#B1B6B2"
+  },
+  {
+   "brand": "Interpon",
+   "range": "Interpon D2525",
+   "code": "YY223A",
+   "name": "Anodic Natural",
+   "finish": "Matt",
+   "hex": "#AFB4AF"
+  },
+  {
+   "brand": "Interpon",
+   "range": "Interpon D2525",
+   "code": "YY245A",
+   "name": "Citi Pearl",
+   "finish": "Matt",
+   "hex": "#B4B8B4"
+  },
+  {
+   "brand": "Interpon",
+   "range": "Interpon D2525",
+   "code": "YW277G",
+   "name": "Champagne Riche",
+   "finish": "Matt",
+   "hex": "#BDB8A7"
+  },
+  {
+   "brand": "Interpon",
+   "range": "Interpon D2525",
+   "code": "YY255A",
+   "name": "Luxe Bronze Pearl",
+   "finish": "Matt",
+   "hex": "#ADA490"
+  },
+  {
+   "brand": "Interpon",
+   "range": "Interpon D2525",
+   "code": "YW26FC",
+   "name": "Scintillating Champagne",
+   "finish": "Matt",
+   "hex": "#9A8A7E"
+  },
+  {
+   "brand": "Interpon",
+   "range": "Interpon D2525",
+   "code": "YY276A",
+   "name": "Champagne Pearl",
+   "finish": "Matt",
+   "hex": "#B2B4AC"
+  },
+  {
+   "brand": "Interpon",
+   "range": "Interpon D2525",
+   "code": "YX136A",
+   "name": "Nobel Silver Pearl",
+   "finish": "Satin",
+   "hex": "#959593"
+  },
+  {
+   "brand": "Interpon",
+   "range": "Interpon D2525",
+   "code": "YW209G",
+   "name": "Silver Riche",
+   "finish": "Matt",
+   "hex": "#ABB2B0"
+  },
+  {
+   "brand": "Interpon",
+   "range": "Interpon D2525",
+   "code": "YY124A",
+   "name": "Pewter Pearl",
+   "finish": "Satin",
+   "hex": "#808788"
+  },
+  {
+   "brand": "Interpon",
+   "range": "Interpon D2525",
+   "code": "YW100C",
+   "name": "Eternal Silver",
+   "finish": "Satin",
+   "hex": "#959AA1"
+  },
+  {
+   "brand": "Interpon",
+   "range": "Interpon D2525",
+   "code": "YY218A",
+   "name": "Anodic Slate Grey",
+   "finish": "Matt",
+   "hex": "#898887"
+  },
+  {
+   "brand": "Interpon",
+   "range": "Interpon D2525",
+   "code": "YP174A",
+   "name": "Grey",
+   "finish": "Satin",
+   "hex": "#6F7677"
+  },
+  {
+   "brand": "Interpon",
+   "range": "Interpon D2525",
+   "code": "YA236A",
+   "name": "Surfmist",
+   "finish": "Matt",
+   "hex": "#D6DAD4"
+  },
+  {
+   "brand": "Interpon",
+   "range": "Interpon D2525",
+   "code": "YP273A",
+   "name": "Lunar Grey",
+   "finish": "Matt",
+   "hex": "#C2C8C5"
+  },
+  {
+   "brand": "Interpon",
+   "range": "Interpon D2525",
+   "code": "YP275A",
+   "name": "Timberland",
+   "finish": "Matt",
+   "hex": "#565953"
+  },
+  {
+   "brand": "Interpon",
+   "range": "Interpon D2525",
+   "code": "YP175A",
+   "name": "Timberland",
+   "finish": "Satin",
+   "hex": "#565954"
+  },
+  {
+   "brand": "Interpon",
+   "range": "Interpon D2525",
+   "code": "YY263A",
+   "name": "Titanium Pearl",
+   "finish": "Matt",
+   "hex": "#616560"
+  },
+  {
+   "brand": "Interpon",
+   "range": "Interpon D2525",
+   "code": "YL238A",
+   "name": "Charcoal",
+   "finish": "Matt",
+   "hex": "#3C4345"
+  },
+  {
+   "brand": "Interpon",
+   "range": "Interpon D2525",
+   "code": "YP116A",
+   "name": "Charcoal",
+   "finish": "Satin",
+   "hex": "#3E4649"
+  },
+  {
+   "brand": "Interpon",
+   "range": "Interpon D2525",
+   "code": "YP278A",
+   "name": "Dark Grey",
+   "finish": "Matt",
+   "hex": "#43494B"
+  },
+  {
+   "brand": "Interpon",
+   "range": "Interpon D2525",
+   "code": "YN201A",
+   "name": "Ebony",
+   "finish": "Matt",
+   "hex": "#313633"
+  },
+  {
+   "brand": "Interpon",
+   "range": "Interpon D2525",
+   "code": "YL264A",
+   "name": "Monument",
+   "finish": "Matt",
+   "hex": "#3E3B38"
+  },
+  {
+   "brand": "Interpon",
+   "range": "Interpon D2525",
+   "code": "YP182A",
+   "name": "Monument  MKII",
+   "finish": "Satin",
+   "hex": "#444948"
+  },
+  {
+   "brand": "Interpon",
+   "range": "Interpon D2525",
+   "code": "YY163A",
+   "name": "Titanium Pearl",
+   "finish": "Satin",
+   "hex": "#5E6361"
+  },
+  {
+   "brand": "Interpon",
+   "range": "Interpon D2525",
+   "code": "YN167A",
+   "name": "Black",
+   "finish": "Satin",
+   "hex": "#2C3231"
+  },
+  {
+   "brand": "Interpon",
+   "range": "Interpon D2525",
+   "code": "YY237A",
+   "name": "Charcoal Pearl",
+   "finish": "Matt",
+   "hex": "#3F413E"
+  },
+  {
+   "brand": "Interpon",
+   "range": "Interpon D2525",
+   "code": "YY248A",
+   "name": "Endura Bronze",
+   "finish": "Matt",
+   "hex": "#5D5D58"
+  },
+  {
+   "brand": "Interpon",
+   "range": "Interpon D2525",
+   "code": "YY270A",
+   "name": "Asteroid Pearl",
+   "finish": "Matt",
+   "hex": "#5B5C54"
+  },
+  {
+   "brand": "Interpon",
+   "range": "Interpon D2525",
+   "code": "YY225A",
+   "name": "Bronze Pearl",
+   "finish": "Matt",
+   "hex": "#4D4738"
+  },
+  {
+   "brand": "Interpon",
+   "range": "Interpon D2525",
+   "code": "YY311A",
+   "name": "Bleu",
+   "finish": "Texture",
+   "hex": "#364954"
+  },
+  {
+   "brand": "Interpon",
+   "range": "Interpon D2525",
+   "code": "YY22AA",
+   "name": "Copper Penny",
+   "finish": "Matt",
+   "hex": "#8F6244"
+  },
+  {
+   "brand": "Interpon",
+   "range": "Interpon D2525 Structura",
+   "code": "YA378A",
+   "name": "Structura Pearl White",
+   "finish": "Texture",
+   "hex": "#E4EFF3"
+  },
+  {
+   "brand": "Interpon",
+   "range": "Interpon D2525 Structura",
+   "code": "YA346A",
+   "name": "Structura Surfmist",
+   "finish": "Texture",
+   "hex": "#CED2CC"
+  },
+  {
+   "brand": "Interpon",
+   "range": "Interpon D2525 Structura",
+   "code": "YL325A",
+   "name": "Structura Gris",
+   "finish": "Texture",
+   "hex": "#959185"
+  },
+  {
+   "brand": "Interpon",
+   "range": "Interpon D2525 Structura",
+   "code": "YY315A",
+   "name": "Structura Quantum Green Pearl",
+   "finish": "Texture",
+   "hex": "#5C6246"
+  },
+  {
+   "brand": "Interpon",
+   "range": "Interpon D2525 Structura",
+   "code": "YY324A",
+   "name": "Structura Ordos",
+   "finish": "Texture",
+   "hex": "#7B5941"
+  },
+  {
+   "brand": "Interpon",
+   "range": "Interpon D2525 Structura",
+   "code": "YY318A",
+   "name": "Structura Scinti Champagne",
+   "finish": "Texture",
+   "hex": "#8D8779"
+  },
+  {
+   "brand": "Interpon",
+   "range": "Interpon D2525 Structura",
+   "code": "YY35BA",
+   "name": "Structura Golden Touch",
+   "finish": "Texture",
+   "hex": "#897B61"
+  },
+  {
+   "brand": "Interpon",
+   "range": "Interpon D2525 Structura",
+   "code": "YX369A",
+   "name": "Structura Silver",
+   "finish": "Texture",
+   "hex": "#9DA3A1"
+  },
+  {
+   "brand": "Interpon",
+   "range": "Interpon D2525 Structura",
+   "code": "YY372A",
+   "name": "Structura Gondar Gold",
+   "finish": "Texture",
+   "hex": "#A37C3F"
+  },
+  {
+   "brand": "Interpon",
+   "range": "Interpon D2525 Structura",
+   "code": "YX365A",
+   "name": "Structura Core Ten",
+   "finish": "Texture",
+   "hex": "#55443B"
+  },
+  {
+   "brand": "Interpon",
+   "range": "Interpon D2525 Structura",
+   "code": "YY398A",
+   "name": "Structura Medium Bronze",
+   "finish": "Texture",
+   "hex": "#4F4A3F"
+  },
+  {
+   "brand": "Interpon",
+   "range": "Interpon D2525 Structura",
+   "code": "YY369A",
+   "name": "Structura Asteroid",
+   "finish": "Texture",
+   "hex": "#4A4B46"
+  },
+  {
+   "brand": "Interpon",
+   "range": "Interpon D2525 Structura",
+   "code": "YY374A",
+   "name": "Structura Brilliant",
+   "finish": "Texture",
+   "hex": "#5E6262"
+  },
+  {
+   "brand": "Interpon",
+   "range": "Interpon D2525 Structura",
+   "code": "YY373A",
+   "name": "Structura Bass",
+   "finish": "Texture",
+   "hex": "#444A4A"
+  },
+  {
+   "brand": "Interpon",
+   "range": "Interpon D2525 Structura",
+   "code": "YL364A",
+   "name": "Structura Monument",
+   "finish": "Texture",
+   "hex": "#424646"
+  },
+  {
+   "brand": "Interpon",
+   "range": "Interpon D2525 Structura",
+   "code": "YL395A",
+   "name": "Structura Flaxpod",
+   "finish": "Texture",
+   "hex": "#3D4141"
+  },
+  {
+   "brand": "Interpon",
+   "range": "Interpon D2525 Structura",
+   "code": "YM333A",
+   "name": "Structura Ironsand",
+   "finish": "Texture",
+   "hex": "#424441"
+  },
+  {
+   "brand": "Interpon",
+   "range": "Interpon D2525 Structura",
+   "code": "YN306A",
+   "name": "Structura Black",
+   "finish": "Texture",
+   "hex": "#303534"
+  },
+  {
+   "brand": "Interpon",
+   "range": "Interpon D2525 Color Vitality",
+   "code": "YE087A",
+   "name": "Brilliant Yellow",
+   "finish": "Gloss",
+   "hex": "#F5DF3D"
+  },
+  {
+   "brand": "Interpon",
+   "range": "Interpon D2525 Color Vitality",
+   "code": "YK063A",
+   "name": "Lycra Strip",
+   "finish": "Gloss",
+   "hex": "#C8D954"
+  },
+  {
+   "brand": "Interpon",
+   "range": "Interpon D2525 Color Vitality",
+   "code": "YK051A",
+   "name": "Viper Green",
+   "finish": "Gloss",
+   "hex": "#68A048"
+  },
+  {
+   "brand": "Interpon",
+   "range": "Interpon D2525 Color Vitality",
+   "code": "YK043A",
+   "name": "Shamrock Green",
+   "finish": "Gloss",
+   "hex": "#476E40"
+  },
+  {
+   "brand": "Interpon",
+   "range": "Interpon D2525 Color Vitality",
+   "code": "YF049A",
+   "name": "Sensation",
+   "finish": "Gloss",
+   "hex": "#DE6A31"
+  },
+  {
+   "brand": "Interpon",
+   "range": "Interpon D2525 Color Vitality",
+   "code": "YG154A",
+   "name": "Lobster",
+   "finish": "Satin",
+   "hex": "#A5382D"
+  },
+  {
+   "brand": "Interpon",
+   "range": "Interpon D2525 Color Vitality",
+   "code": "YJ046A",
+   "name": "Bondi Blue",
+   "finish": "Gloss",
+   "hex": "#3083C1"
+  },
+  {
+   "brand": "Interpon",
+   "range": "Interpon D2525 Color Vitality",
+   "code": "YJ175A",
+   "name": "Jaybird",
+   "finish": "Satin",
+   "hex": "#1B6193"
+  },
+  {
+   "brand": "Interpon",
+   "range": "Interpon D2525 Flat Matt",
+   "code": "YY23BA",
+   "name": "Pacific Blue",
+   "finish": "Flat Matt",
+   "hex": "#708185"
+  },
+  {
+   "brand": "Interpon",
+   "range": "Interpon D2525 Flat Matt",
+   "code": "YA25BA",
+   "name": "White",
+   "finish": "Flat Matt",
+   "hex": "#E5ECEC"
+  },
+  {
+   "brand": "Interpon",
+   "range": "Interpon D2525 Flat Matt",
+   "code": "YY28PA",
+   "name": "Linen",
+   "finish": "Flat Matt",
+   "hex": "#DEE0DA"
+  },
+  {
+   "brand": "Interpon",
+   "range": "Interpon D2525 Flat Matt",
+   "code": "YY25AA",
+   "name": "Natural Shimmer",
+   "finish": "Flat Matt",
+   "hex": "#BABEBD"
+  },
+  {
+   "brand": "Interpon",
+   "range": "Interpon D2525 Flat Matt",
+   "code": "YY24NA",
+   "name": "Champagne Shimmer",
+   "finish": "Flat Matt",
+   "hex": "#877F72"
+  },
+  {
+   "brand": "Interpon",
+   "range": "Interpon D2525 Flat Matt",
+   "code": "YY21BA",
+   "name": "Sunstone Bronze",
+   "finish": "Flat Matt",
+   "hex": "#7A7363"
+  },
+  {
+   "brand": "Interpon",
+   "range": "Interpon D2525 Flat Matt",
+   "code": "YY22BA",
+   "name": "Pure Gold",
+   "finish": "Flat Matt",
+   "hex": "#A98D5F"
+  },
+  {
+   "brand": "Interpon",
+   "range": "Interpon D2525 Flat Matt",
+   "code": "YY25BA",
+   "name": "Golden Touch Pearl",
+   "finish": "Flat Matt",
+   "hex": "#85775C"
+  },
+  {
+   "brand": "Interpon",
+   "range": "Interpon D2525 Flat Matt",
+   "code": "YY23TA",
+   "name": "Brilliance",
+   "finish": "Flat Matt",
+   "hex": "#676358"
+  },
+  {
+   "brand": "Interpon",
+   "range": "Interpon D2525 Flat Matt",
+   "code": "YY23NA",
+   "name": "Medium Bronze Pearl",
+   "finish": "Flat Matt",
+   "hex": "#575042"
+  },
+  {
+   "brand": "Interpon",
+   "range": "Interpon D2525 Flat Matt",
+   "code": "YY20BA",
+   "name": "Dark Bronze",
+   "finish": "Flat Matt",
+   "hex": "#434138"
+  },
+  {
+   "brand": "Interpon",
+   "range": "Interpon D2525 Flat Matt",
+   "code": "YN21BA",
+   "name": "Black Ink",
+   "finish": "Flat Matt",
+   "hex": "#303533"
+  },
+  {
+   "brand": "Interpon",
+   "range": "Interpon D2525 Flat Matt",
+   "code": "YP229A",
+   "name": "Monument",
+   "finish": "Flat Matt",
+   "hex": "#373B39"
+  },
+  {
+   "brand": "Interpon",
+   "range": "Interpon D2525 Flat Matt",
+   "code": "YY22NA",
+   "name": "Vintage Silver",
+   "finish": "Flat Matt",
+   "hex": "#696D6E"
+  },
+  {
+   "brand": "Interpon",
+   "range": "Interpon D2525 Flat Matt",
+   "code": "YP227A",
+   "name": "Basalt",
+   "finish": "Flat Matt",
+   "hex": "#525756"
+  },
+  {
+   "brand": "Interpon",
+   "range": "Interpon D3020",
+   "code": "8Y211A",
+   "name": "Hyper Coin",
+   "finish": "Matt",
+   "hex": "#B3BCBD"
+  },
+  {
+   "brand": "Interpon",
+   "range": "Interpon D3020",
+   "code": "8Y276A",
+   "name": "Champagne Pearl",
+   "finish": "Matt",
+   "hex": "#B2B4AC"
+  },
+  {
+   "brand": "Interpon",
+   "range": "Interpon D3020",
+   "code": "8G200A",
+   "name": "Simpson Clay",
+   "finish": "Matt",
+   "hex": "#E1A98C"
+  },
+  {
+   "brand": "Interpon",
+   "range": "Interpon D3020",
+   "code": "8M213A",
+   "name": "Rojo Rock",
+   "finish": "Matt",
+   "hex": "#8E573D"
+  },
+  {
+   "brand": "Interpon",
+   "range": "Interpon D3020",
+   "code": "8G212A",
+   "name": "Outback Red",
+   "finish": "Matt",
+   "hex": "#88473C"
+  },
+  {
+   "brand": "Interpon",
+   "range": "Interpon D3020",
+   "code": "8Y263A",
+   "name": "Titanium Pearl",
+   "finish": "Matt",
+   "hex": "#616560"
+  },
+  {
+   "brand": "Interpon",
+   "range": "Interpon D3020",
+   "code": "8Y270A",
+   "name": "Asteroid Pearl",
+   "finish": "Matt",
+   "hex": "#5B5C54"
+  },
+  {
+   "brand": "Interpon",
+   "range": "Interpon D3020",
+   "code": "8Y224A",
+   "name": "Dark Bronze",
+   "finish": "Matt",
+   "hex": "#524C40"
+  },
+  {
+   "brand": "Interpon",
+   "range": "Interpon D3020",
+   "code": "8Y225A",
+   "name": "Bronze Pearl",
+   "finish": "Matt",
+   "hex": "#564D39"
+  },
+  {
+   "brand": "Interpon",
+   "range": "Interpon D3020",
+   "code": "8M214A",
+   "name": "Red Bush Apple",
+   "finish": "Matt",
+   "hex": "#634037"
+  },
+  {
+   "brand": "Interpon",
+   "range": "Interpon D3020",
+   "code": "8L216A",
+   "name": "Sea Storm",
+   "finish": "Matt",
+   "hex": "#48544F"
+  },
+  {
+   "brand": "Interpon",
+   "range": "Interpon D3020",
+   "code": "8A210A",
+   "name": "Hyper White",
+   "finish": "Matt",
+   "hex": "#FBFFFC"
+  },
+  {
+   "brand": "Interpon",
+   "range": "Interpon D3020",
+   "code": "8A237A",
+   "name": "Sandstone",
+   "finish": "Matt",
+   "hex": "#E6EAEA"
+  },
+  {
+   "brand": "Interpon",
+   "range": "Interpon D3020",
+   "code": "8E207A",
+   "name": "Honey Myrtle",
+   "finish": "Matt",
+   "hex": "#EAD590"
+  },
+  {
+   "brand": "Interpon",
+   "range": "Interpon D3020",
+   "code": "8M201A",
+   "name": "Desert Dream",
+   "finish": "Matt",
+   "hex": "#C6905A"
+  },
+  {
+   "brand": "Interpon",
+   "range": "Interpon D3020",
+   "code": "8Y221A",
+   "name": "Gold Pearl",
+   "finish": "Matt",
+   "hex": "#ABAE5F"
+  },
+  {
+   "brand": "Interpon",
+   "range": "Interpon D3020",
+   "code": "8L244A",
+   "name": "Monument",
+   "finish": "Matt",
+   "hex": "#3E3B38"
+  },
+  {
+   "brand": "Interpon",
+   "range": "Interpon D3020",
+   "code": "8L210A",
+   "name": "Hyper Charcoal",
+   "finish": "Matt",
+   "hex": "#424A4B"
+  },
+  {
+   "brand": "Interpon",
+   "range": "Interpon D3020",
+   "code": "8N209A",
+   "name": "Hyper Black",
+   "finish": "Matt",
+   "hex": "#2B302F"
+  },
+  {
+   "brand": "Interpon",
+   "range": "Interpon D3020",
+   "code": "8J215A",
+   "name": "Hardy Reef",
+   "finish": "Matt",
+   "hex": "#3B7AAB"
+  },
+  {
+   "brand": "Interpon",
+   "range": "Interpon D3020",
+   "code": "8Y223A",
+   "name": "Crystal Mint Pearl",
+   "finish": "Matt",
+   "hex": "#4AA590"
+  },
+  {
+   "brand": "Interpon",
+   "range": "Interpon D3020",
+   "code": "8E219A",
+   "name": "Beachouse Yellow",
+   "finish": "Matt",
+   "hex": "#F2C137"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duralloy",
+   "code": "2721139M",
+   "name": "White",
+   "finish": "Matt",
+   "hex": "#F3F4EF"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duralloy",
+   "code": "2721139S",
+   "name": "White",
+   "finish": "Satin",
+   "hex": "#F6F6F2"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duralloy",
+   "code": "27281880",
+   "name": "Classic Pearl White",
+   "finish": "Gloss",
+   "hex": "#F4F7F4"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duralloy",
+   "code": "27284636",
+   "name": "Bright White",
+   "finish": "Gloss",
+   "hex": "#E2EAF3"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duralloy",
+   "code": "2721114G",
+   "name": "Pearl White",
+   "finish": "Gloss",
+   "hex": "#EFF6F3"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duralloy",
+   "code": "2721378M",
+   "name": "Lexicon Quarter",
+   "finish": "Matt",
+   "hex": "#F5F3EF"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duralloy",
+   "code": "2721380M",
+   "name": "Natural White",
+   "finish": "Matt",
+   "hex": "#F1EBE4"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duralloy",
+   "code": "2721384M",
+   "name": "Dover White",
+   "finish": "Matt",
+   "hex": "#E5E7E7"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duralloy",
+   "code": "2721096G",
+   "name": "Toyota White 040",
+   "finish": "Gloss",
+   "hex": "#E8E8E6"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duralloy",
+   "code": "2721376M",
+   "name": "Whisper White",
+   "finish": "Matt",
+   "hex": "#ECEAE4"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duralloy",
+   "code": "27284682",
+   "name": "Shoji White",
+   "finish": "Satin",
+   "hex": "#E4E1D9"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duralloy",
+   "code": "2721036G",
+   "name": "New Toyota White 058",
+   "finish": "Gloss",
+   "hex": "#DEDDD2"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duralloy",
+   "code": "27237131",
+   "name": "White Birch",
+   "finish": "Gloss",
+   "hex": "#F8EDDD"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duralloy",
+   "code": "2722265M",
+   "name": "Classic Cream",
+   "finish": "Matt",
+   "hex": "#E8D4B6"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duralloy",
+   "code": "2722095S",
+   "name": "Classic Cream",
+   "finish": "Satin",
+   "hex": "#E8D4B6"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duralloy",
+   "code": "27284365",
+   "name": "Primrose",
+   "finish": "Gloss",
+   "hex": "#EFDBBB"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duralloy",
+   "code": "2723272M",
+   "name": "Lama",
+   "finish": "Matt",
+   "hex": "#E2BC9D"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duralloy",
+   "code": "2724410M",
+   "name": "Pink Sand",
+   "finish": "Matt",
+   "hex": "#D3BAAE"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duralloy",
+   "code": "27236991",
+   "name": "Rivergum Beige",
+   "finish": "Gloss",
+   "hex": "#DDD2C4"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duralloy",
+   "code": "2723174M",
+   "name": "Paperbark",
+   "finish": "Matt",
+   "hex": "#CDB9A4"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duralloy",
+   "code": "2723088S",
+   "name": "Paperbark",
+   "finish": "Satin",
+   "hex": "#CDB9A4"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duralloy",
+   "code": "27232538",
+   "name": "Stone Beige",
+   "finish": "Matt",
+   "hex": "#C7B29B"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duralloy",
+   "code": "2727558M",
+   "name": "Dune",
+   "finish": "Matt",
+   "hex": "#B3ABA2"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duralloy",
+   "code": "2723087S",
+   "name": "Dune",
+   "finish": "Satin",
+   "hex": "#B3A99F"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duralloy",
+   "code": "2723055S",
+   "name": "Evening Haze",
+   "finish": "Satin",
+   "hex": "#C7BEAD"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duralloy",
+   "code": "2727951S",
+   "name": "RAL 7032 Pebble Grey",
+   "finish": "Satin",
+   "hex": "#B7B1A1"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duralloy",
+   "code": "2726250S",
+   "name": "Cove",
+   "finish": "Satin",
+   "hex": "#9C927D"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duralloy",
+   "code": "2723193M",
+   "name": "Riversand",
+   "finish": "Matt",
+   "hex": "#A69788"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duralloy",
+   "code": "2722266M",
+   "name": "Surfmist",
+   "finish": "Matt",
+   "hex": "#DCDCD3"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duralloy",
+   "code": "2721137S",
+   "name": "Surfmist",
+   "finish": "Satin",
+   "hex": "#D9D8CF"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duralloy",
+   "code": "2727863G",
+   "name": "Grey Nurse",
+   "finish": "Gloss",
+   "hex": "#CAC7BD"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duralloy",
+   "code": "27236858",
+   "name": "Oyster",
+   "finish": "Matt",
+   "hex": "#C5C6C1"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duralloy",
+   "code": "2727909M",
+   "name": "Southerly",
+   "finish": "Matt",
+   "hex": "#C6C6C6"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duralloy",
+   "code": "2727557M",
+   "name": "Shale Grey",
+   "finish": "Matt",
+   "hex": "#B9BAB5"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duralloy",
+   "code": "27283246",
+   "name": "Shale Grey",
+   "finish": "Satin",
+   "hex": "#BABBB6"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duralloy",
+   "code": "2727907S",
+   "name": "RAL 7035 Light Grey",
+   "finish": "Satin",
+   "hex": "#C4C7C4"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duralloy",
+   "code": "27251272",
+   "name": "Anotec Silver Grey",
+   "finish": "Matt",
+   "hex": "#B6B8BA"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duralloy",
+   "code": "27232786",
+   "name": "APO Grey",
+   "finish": "Satin",
+   "hex": "#B3B3B3"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duralloy",
+   "code": "27278126",
+   "name": "Stone Grey",
+   "finish": "Satin",
+   "hex": "#9C9894"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duralloy",
+   "code": "2727559M",
+   "name": "Windspray",
+   "finish": "Matt",
+   "hex": "#8A8F8D"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duralloy",
+   "code": "2727256S",
+   "name": "Windspray",
+   "finish": "Satin",
+   "hex": "#8A8F8D"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duralloy",
+   "code": "2727910M",
+   "name": "Bluegum",
+   "finish": "Matt",
+   "hex": "#91979C"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duralloy",
+   "code": "2728233S",
+   "name": "Gully",
+   "finish": "Satin",
+   "hex": "#837B72"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duralloy",
+   "code": "2728413M",
+   "name": "Jasper",
+   "finish": "Matt",
+   "hex": "#73695F"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duralloy",
+   "code": "2728122S",
+   "name": "Jasper",
+   "finish": "Satin",
+   "hex": "#756C61"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duralloy",
+   "code": "27251014",
+   "name": "Anotec Mid Bronze",
+   "finish": "Matt",
+   "hex": "#534842"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duralloy",
+   "code": "27284657",
+   "name": "Hammersley Brown",
+   "finish": "Satin",
+   "hex": "#594B49"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duralloy",
+   "code": "2727866M",
+   "name": "Wallaby",
+   "finish": "Matt",
+   "hex": "#7A7776"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duralloy",
+   "code": "2727866S",
+   "name": "Wallaby",
+   "finish": "Satin",
+   "hex": "#7A7776"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duralloy",
+   "code": "2727197M",
+   "name": "Woodland Grey",
+   "finish": "Matt",
+   "hex": "#5F5D59"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duralloy",
+   "code": "2727255S",
+   "name": "Woodland Grey",
+   "finish": "Satin",
+   "hex": "#615F5B"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duralloy",
+   "code": "2727865M",
+   "name": "Basalt",
+   "finish": "Matt",
+   "hex": "#6A6C6D"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duralloy",
+   "code": "2727865S",
+   "name": "Basalt",
+   "finish": "Satin",
+   "hex": "#6A6C6D"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duralloy",
+   "code": "27250243",
+   "name": "Olde Pewter",
+   "finish": "Satin",
+   "hex": "#7A7C7D"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duralloy",
+   "code": "27236672",
+   "name": "Notre Dame",
+   "finish": "Gloss",
+   "hex": "#6A6F6F"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duralloy",
+   "code": "27288362",
+   "name": "Berry Grey",
+   "finish": "Satin",
+   "hex": "#5C6064"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duralloy",
+   "code": "2727262G",
+   "name": "Berry Grey",
+   "finish": "Gloss",
+   "hex": "#5C6064"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duralloy",
+   "code": "2727864M",
+   "name": "Ironstone",
+   "finish": "Matt",
+   "hex": "#595C64"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duralloy",
+   "code": "2727257S",
+   "name": "Ironstone",
+   "finish": "Satin",
+   "hex": "#565C61"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duralloy",
+   "code": "27251275",
+   "name": "Anotec Dark Grey",
+   "finish": "Matt",
+   "hex": "#4A5055"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duralloy",
+   "code": "2729066M",
+   "name": "Monument",
+   "finish": "Matt",
+   "hex": "#525152"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duralloy",
+   "code": "2729067S",
+   "name": "Monument",
+   "finish": "Satin",
+   "hex": "#505050"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duralloy",
+   "code": "2729229M",
+   "name": "Charcoal",
+   "finish": "Matt",
+   "hex": "#45494C"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duralloy",
+   "code": "27288351",
+   "name": "Charcoal",
+   "finish": "Satin",
+   "hex": "#464A4D"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duralloy",
+   "code": "2729086G",
+   "name": "Charcoal",
+   "finish": "Gloss",
+   "hex": "#464B4B"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duralloy",
+   "code": "27219319",
+   "name": "Black (C/B Night Sky)",
+   "finish": "Matt",
+   "hex": "#3B3B3B"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duralloy",
+   "code": "27219268",
+   "name": "Black (C/B Night Sky)",
+   "finish": "Satin",
+   "hex": "#3A3A3C"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duralloy",
+   "code": "2729090G",
+   "name": "Black",
+   "finish": "Gloss",
+   "hex": "#393939"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duralloy",
+   "code": "2726541M",
+   "name": "New Life",
+   "finish": "Matt",
+   "hex": "#A4B7B1"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duralloy",
+   "code": "27232186",
+   "name": "Transformer Grey",
+   "finish": "Gloss",
+   "hex": "#8A948E"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duralloy",
+   "code": "2726535S",
+   "name": "N42 Storm Grey",
+   "finish": "Satin",
+   "hex": "#8F9790"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duralloy",
+   "code": "2726473S",
+   "name": "Mangrove",
+   "finish": "Satin",
+   "hex": "#757565"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duralloy",
+   "code": "2726474M",
+   "name": "Pale Eucalypt",
+   "finish": "Matt",
+   "hex": "#848A76"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duralloy",
+   "code": "2726474S",
+   "name": "Pale Eucalypt",
+   "finish": "Satin",
+   "hex": "#848A76"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duralloy",
+   "code": "27284224",
+   "name": "Wilderness",
+   "finish": "Satin",
+   "hex": "#6F7A6E"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duralloy",
+   "code": "27284219",
+   "name": "Cottage Green",
+   "finish": "Satin",
+   "hex": "#4D5F54"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duralloy",
+   "code": "2726134G",
+   "name": "Deep Brunswick Green",
+   "finish": "Gloss",
+   "hex": "#404D46"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duralloy",
+   "code": "2726500M",
+   "name": "Wollemi",
+   "finish": "Matt",
+   "hex": "#434B48"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duralloy",
+   "code": "2725498M",
+   "name": "Pre-School",
+   "finish": "Matt",
+   "hex": "#B8C7D0"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duralloy",
+   "code": "27250279",
+   "name": "Wedgewood",
+   "finish": "Satin",
+   "hex": "#65889C"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duralloy",
+   "code": "27288480",
+   "name": "Blue Ridge",
+   "finish": "Satin",
+   "hex": "#586B75"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duralloy",
+   "code": "2725422M",
+   "name": "Deep Ocean",
+   "finish": "Matt",
+   "hex": "#4C5B63"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duralloy",
+   "code": "2725125S",
+   "name": "Deep Ocean",
+   "finish": "Satin",
+   "hex": "#4A5861"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duralloy",
+   "code": "2725425G",
+   "name": "Navy Blue",
+   "finish": "Gloss",
+   "hex": "#394D60"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duralloy",
+   "code": "2724411M",
+   "name": "Territory Red",
+   "finish": "Matt",
+   "hex": "#905243"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duralloy",
+   "code": "2724134S",
+   "name": "Manor Red",
+   "finish": "Satin",
+   "hex": "#774542"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duralloy",
+   "code": "2728232S",
+   "name": "Terrain",
+   "finish": "Satin",
+   "hex": "#714D40"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duralloy RapidCure",
+   "code": "2601139S",
+   "name": "White",
+   "finish": "Satin",
+   "hex": "#F6F6F2"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duralloy RapidCure",
+   "code": "2601228G",
+   "name": "Classic Pearl White",
+   "finish": "Gloss",
+   "hex": "#F4F7F4"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duralloy RapidCure",
+   "code": "2601229G",
+   "name": "Pearl White",
+   "finish": "Gloss",
+   "hex": "#F0F5F3"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duralloy RapidCure",
+   "code": "2603167M",
+   "name": "Surfmist",
+   "finish": "Matt",
+   "hex": "#DBDAD2"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duralloy RapidCure",
+   "code": "2601137S",
+   "name": "Surfmist",
+   "finish": "Satin",
+   "hex": "#D9D8CF"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duralloy RapidCure",
+   "code": "2602095S",
+   "name": "Classic Cream",
+   "finish": "Satin",
+   "hex": "#E8D4B6"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duralloy RapidCure",
+   "code": "26084365",
+   "name": "Primrose",
+   "finish": "Gloss",
+   "hex": "#EFDBBB"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duralloy RapidCure",
+   "code": "2603135S",
+   "name": "Paperbark",
+   "finish": "Satin",
+   "hex": "#CDB9A4"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duralloy RapidCure",
+   "code": "26036858",
+   "name": "Oyster",
+   "finish": "Matt",
+   "hex": "#C5C6C1"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duralloy RapidCure",
+   "code": "2607557M",
+   "name": "Shale Grey",
+   "finish": "Matt",
+   "hex": "#B9BAB5"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duralloy RapidCure",
+   "code": "26083246",
+   "name": "Shale Grey",
+   "finish": "Satin",
+   "hex": "#BABBB6"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duralloy RapidCure",
+   "code": "2608252M",
+   "name": "Jasper",
+   "finish": "Matt",
+   "hex": "#75695F"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duralloy RapidCure",
+   "code": "2607474S",
+   "name": "Wallaby",
+   "finish": "Satin",
+   "hex": "#7A7671"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duralloy RapidCure",
+   "code": "2606256M",
+   "name": "Woodland Grey",
+   "finish": "Matt",
+   "hex": "#5D5E59"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duralloy RapidCure",
+   "code": "2606255S",
+   "name": "Woodland Grey",
+   "finish": "Satin",
+   "hex": "#5F5D59"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duralloy RapidCure",
+   "code": "2607475M",
+   "name": "Basalt",
+   "finish": "Matt",
+   "hex": "#696969"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duralloy RapidCure",
+   "code": "2607473S",
+   "name": "Basalt",
+   "finish": "Satin",
+   "hex": "#696969"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duralloy RapidCure",
+   "code": "2607556M",
+   "name": "Ironstone",
+   "finish": "Matt",
+   "hex": "#565A60"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duralloy RapidCure",
+   "code": "2607257S",
+   "name": "Ironstone",
+   "finish": "Satin",
+   "hex": "#565C61"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duralloy RapidCure",
+   "code": "26088351",
+   "name": "Charcoal",
+   "finish": "Satin",
+   "hex": "#464A4D"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duralloy RapidCure",
+   "code": "2609066M",
+   "name": "Monument",
+   "finish": "Matt",
+   "hex": "#4F4F4F"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duralloy RapidCure",
+   "code": "2609067S",
+   "name": "Monument",
+   "finish": "Satin",
+   "hex": "#4F4F4F"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duralloy RapidCure",
+   "code": "2609129M",
+   "name": "Black (C/B Night Sky)",
+   "finish": "Matt",
+   "hex": "#3B3B3B"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duralloy RapidCure",
+   "code": "2609128S",
+   "name": "Black (C/B Night Sky)",
+   "finish": "Satin",
+   "hex": "#3B3B3B"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duralloy RapidCure",
+   "code": "2609132G",
+   "name": "Black",
+   "finish": "Gloss",
+   "hex": "#3D3D3D"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duralloy RapidCure",
+   "code": "2606127S",
+   "name": "Pale Eucalypt",
+   "finish": "Satin",
+   "hex": "#848A76"
+  }
+ ]
+}

@@ -304,8 +304,23 @@ CREATE TABLE IF NOT EXISTS sub_job_status (
     eta_date TEXT,
     priority INTEGER NOT NULL DEFAULT 2,
     note TEXT,
+    -- The day it's planned to be coated on the powdercoat schedule; NULL is
+    -- Holding.
+    scheduled_date TEXT,
     updated_at TEXT NOT NULL,
     PRIMARY KEY (prod_order_no, work_centre_no)
+);
+
+-- Colours set by hand on the powdercoat board, for a code or description the
+-- Dulux/Interpon library doesn't recognise. colour_key is colours.colour_key().
+CREATE TABLE IF NOT EXISTS powder_colours (
+    colour_key TEXT PRIMARY KEY,
+    brand TEXT NOT NULL DEFAULT '',
+    code TEXT NOT NULL DEFAULT '',
+    name TEXT NOT NULL,
+    hex TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    updated_by TEXT
 );
 """
 
@@ -352,6 +367,9 @@ def _add_missing_columns(conn) -> None:
     to run on every start: the check is what the table actually has, and the
     default backfills existing rows with zero rather than disturbing them.
     """
+    if "scheduled_date" not in {r[1] for r in conn.execute("PRAGMA table_info(sub_job_status)")}:
+        conn.execute("ALTER TABLE sub_job_status ADD COLUMN scheduled_date TEXT")
+
     # Accounts were all equal until door numbers needed an owner.
     if "is_admin" not in {r[1] for r in conn.execute("PRAGMA table_info(users)")}:
         conn.execute("ALTER TABLE users ADD COLUMN is_admin INTEGER NOT NULL DEFAULT 0")
@@ -1058,7 +1076,7 @@ def set_sub_status(prod_order_no: str, work_centre_no: str, **fields) -> dict:
     passed in are written; anything omitted keeps its stored value."""
     from datetime import datetime, timezone
 
-    allowed = ("status", "eta_date", "priority", "note")
+    allowed = ("status", "eta_date", "priority", "note", "scheduled_date")
     updates = {k: v for k, v in fields.items() if k in allowed}
     now = datetime.now(timezone.utc).isoformat()
 
@@ -1078,6 +1096,33 @@ def set_sub_status(prod_order_no: str, work_centre_no: str, **fields) -> dict:
             (prod_order_no, work_centre_no),
         ).fetchone()
         return dict(row)
+
+
+def get_powder_colours() -> list[dict]:
+    with get_conn() as conn:
+        cur = conn.execute("SELECT * FROM powder_colours ORDER BY name")
+        return [dict(r) for r in cur.fetchall()]
+
+
+def set_powder_colour(colour_key: str, name: str, hex_: str, code: str = "", brand: str = "",
+                      user: str | None = None) -> dict:
+    from datetime import datetime, timezone
+
+    now = datetime.now(timezone.utc).isoformat()
+    with get_conn() as conn:
+        conn.execute(
+            "INSERT INTO powder_colours (colour_key, brand, code, name, hex, updated_at, updated_by) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(colour_key) DO UPDATE SET "
+            "brand = excluded.brand, code = excluded.code, name = excluded.name, hex = excluded.hex, "
+            "updated_at = excluded.updated_at, updated_by = excluded.updated_by",
+            (colour_key, brand, code, name, hex_, now, user),
+        )
+        return dict(conn.execute("SELECT * FROM powder_colours WHERE colour_key = ?", (colour_key,)).fetchone())
+
+
+def delete_powder_colour(colour_key: str) -> int:
+    with get_conn() as conn:
+        return conn.execute("DELETE FROM powder_colours WHERE colour_key = ?", (colour_key,)).rowcount
 
 
 # ---------- users and settings ----------
