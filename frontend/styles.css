@@ -2360,7 +2360,9 @@ body.is-gantt-open { overflow: hidden; }
   border: 1px solid var(--border);
   color: var(--text-secondary);
 }
-.pc-status-waiting_material { color: var(--status-critical); border-color: color-mix(in srgb, var(--status-critical) 45%, transparent); }
+.pc-status-pc_pick { color: var(--status-critical); border-color: color-mix(in srgb, var(--status-critical) 45%, transparent); }
+.sub-card.is-pc-done { background: var(--card-done-bg); border-color: var(--card-done-line); }
+.sub-card.is-card-behind { border-color: var(--status-critical); box-shadow: inset 4px 0 0 0 var(--status-critical); }
 
 .pc-print-swatch {
   display: inline-block;
@@ -2388,3 +2390,51 @@ body.is-gantt-open { overflow: hidden; }
   color: var(--status-critical);
 }
 .key-behind::before { border-color: var(--status-critical); box-shadow: inset 4px 0 0 0 var(--status-critical); }
+
+/* ---------- in production now ---------- */
+
+/* Someone pressed Start on it and hasn't finished. Green, the same as a
+   finished step, because it's good news: the work is moving. */
+.work-badge {
+  display: inline-block;
+  margin-top: 3px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #fff;
+  background: var(--card-done-line);
+  white-space: nowrap;
+}
+.stage-work-btn {
+  margin-left: 4px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-1);
+  color: var(--text-primary);
+  cursor: pointer;
+}
+.stage-work-btn.is-on { background: var(--card-done-line); border-color: var(--card-done-line); color: #fff; }
+.stage-cell .work-badge { margin-left: 4px; }
+
+.now-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 12px;
+  font-size: 12px;
+}
+.now-label { font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; color: var(--text-muted); font-size: 11px; }
+.now-chip {
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--card-done-line);
+  background: var(--card-done-bg);
+  color: var(--text-primary);
+}
+.now-chip::before { content: "▶ "; color: var(--card-done-line); }
+.now-empty { color: var(--text-muted); }

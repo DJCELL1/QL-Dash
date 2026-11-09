@@ -68,6 +68,10 @@ from db import (
     count_users,
     delete_powder_colour,
     delete_user,
+    end_work,
+    get_open_work,
+    raise_stage_progress,
+    start_work,
     first_account,
     forget_door_numbers,
     get_all_door_numbers,
@@ -196,6 +200,7 @@ def _startup():
     init_db()
     _session_secret()
     _seed_settings()
+    _seed_pc_pick()
     _seed_first_user()
     _seed_first_admin()
     if WATCH_FOLDER:
@@ -1093,6 +1098,7 @@ def api_cavities_progress(request: Request, update: CavityUpdate):
             )
 
     row = set_stage_progress(update.prod_order_no, update.stage, done, actor(request))
+    _stop_if_finished(update.prod_order_no, update.stage, done, total)
     write_audit(actor(request), "cavities.progress",
                 f"{update.prod_order_no} {update.stage} -> {_fmt_qty(done)} of {_fmt_qty(total)}")
     row["total_qty"] = total
@@ -1102,8 +1108,8 @@ def api_cavities_progress(request: Request, update: CavityUpdate):
 # Powdercoating is coated here rather than sent out, so the floor ticks it off
 # the same way as the doors and the cavities. It reads the subcontractors
 # dataset, which is where the PC-Q export lands.
-PC_STAGES = ("pc_prep", "pc_coat", "pc_pack")
-PC_STAGE_LABELS = {"pc_prep": "Prep", "pc_coat": "Coat", "pc_pack": "Pack"}
+PC_STAGES = ("pc_pick", "pc_prep", "pc_coat", "pc_pack")
+PC_STAGE_LABELS = {"pc_pick": "Picking material", "pc_prep": "Prep", "pc_coat": "Coat", "pc_pack": "Pack"}
 PC_DATASET = "subcontractors"
 
 
@@ -1196,6 +1202,7 @@ def api_powdercoat_progress(request: Request, update: PowdercoatUpdate):
             )
 
     row = set_stage_progress(update.prod_order_no, update.stage, done, actor(request))
+    _stop_if_finished(update.prod_order_no, update.stage, done, total)
     write_audit(actor(request), "powdercoat.progress",
                 f"{update.prod_order_no} {update.stage} -> {_fmt_qty(done)} of {_fmt_qty(total)}")
     row["total_qty"] = total
@@ -1255,6 +1262,7 @@ def api_factory_progress(request: Request, update: ProgressUpdate):
             )
 
     row = set_stage_progress(update.prod_order_no, update.stage, done, actor(request))
+    _stop_if_finished(update.prod_order_no, update.stage, done, total)
     write_audit(actor(request), "factory.progress",
                 f"{update.prod_order_no} {update.stage} -> {_fmt_qty(done)}")
     row["total_qty"] = total
@@ -1287,7 +1295,7 @@ def api_factory_reset(request: Request, body: FactoryReset):
 # different PRO numbers, so a stage decides which one to look the order up in.
 # A door job is booked onto a day by its first stage alone; the later stages
 # run on that same day, so they're never booked in their own right.
-SCHEDULABLE_STAGES = (STAGES[0],) + CAVITY_STAGES
+SCHEDULABLE_STAGES = (STAGES[0], CAVITY_STAGES[0])
 
 
 def _grouped_for_stage(stage: str) -> dict:
@@ -1783,6 +1791,49 @@ def api_delete_powder_colour(request: Request, colour_key: str):
     return {"deleted": colour_key}
 
 
+# ---------- who's working on what ----------
+
+
+def _stop_if_finished(pro: str, stage: str, done: float, total: float | None) -> None:
+    """A step that's finished on a job isn't being worked on any more."""
+    if total and done >= total:
+        end_work(pro, stage, "complete")
+
+
+class WorkIn(BaseModel):
+    prod_order_no: str
+    stage: str
+
+
+@app.get("/api/work/active")
+def api_work_active():
+    """Everything someone has started and not finished or stopped."""
+    sessions = []
+    for s in get_open_work():
+        sessions.append({**s, "line": _stage_line(s["stage"]), "label": _stage_label(s["stage"])})
+    return {"sessions": sessions}
+
+
+@app.post("/api/work/start")
+def api_work_start(request: Request, body: WorkIn):
+    if body.stage not in ALL_STAGES:
+        raise HTTPException(status_code=400, detail=f"stage must be one of {', '.join(ALL_STAGES)}")
+    row = start_work(body.prod_order_no, body.stage, actor(request))
+    write_audit(actor(request), "work.start", f"{body.prod_order_no} {body.stage}")
+    return row
+
+
+@app.post("/api/work/stop")
+def api_work_stop(request: Request, body: WorkIn):
+    """Stop your own session; with none of your own, stop the job at that step
+    for everyone, so a supervisor can clear one somebody left running."""
+    n = end_work(body.prod_order_no, body.stage, "stopped", actor(request))
+    if n == 0:
+        n = end_work(body.prod_order_no, body.stage, "stopped")
+    write_audit(actor(request), "work.stop", f"{body.prod_order_no} {body.stage} ({n})")
+    return {"stopped": n}
+
+
 @app.get("/floor")
 def floor_tool():
     """The phone tool the factory floor uses.
@@ -2007,6 +2058,31 @@ QLD_HOLIDAYS_2026 = [
     ("2026-12-25", "Christmas Day"),
     ("2026-12-26", "Boxing Day"),
 ]
+
+
+def _seed_pc_pick():
+    """Picking material became powdercoating's first step. Once, carry what the
+    board already said into it: a job set Ready to coat or In powdercoating has
+    its material, and one set Coated has been prepped and coated too."""
+    if get_setting("pc_pick_seeded"):
+        return
+    _, grouped = _pro_totals(PC_DATASET)
+    for (pro, _wc), s in get_all_sub_status().items():
+        g = grouped.get(pro)
+        total = g["total_qty"] if g else 0
+        if total <= 0:
+            continue
+        if s.get("status") in ("ready_despatch", "at_sub"):
+            raise_stage_progress(pro, {"pc_pick": total})
+        elif s.get("status") == "ready":
+            raise_stage_progress(pro, {"pc_pick": total, "pc_prep": total, "pc_coat": total})
+    set_setting("pc_pick_seeded", "1")
+    # a step added since the week was seeded gets the same week
+    hours = get_work_hours()
+    missing = [st for st in ALL_STAGES if st not in hours]
+    if missing and hours:
+        set_work_hours([{"stage": st, "weekday": wd, "hours": 8.0 if wd < 5 else 0.0}
+                        for st in missing for wd in range(7)])
 
 
 def _seed_settings():
@@ -2553,13 +2629,11 @@ def api_efficiency(date_from: str, date_to: str):
         the_date = e["scheduled_date"]
         if the_date == HOLDING_DATE or not (date_from <= the_date <= date_to):
             continue
-        # a door booking is every stage of those doors, on that day
-        if e["stage"] == STAGES[0]:
-            stages = STAGES
-        elif e["stage"] in STAGES:
+        # a booking is every stage of that line's job, on that day
+        line = LINES.get(_stage_line(e["stage"]))
+        if not line or e["stage"] != line["stages"][0]:
             continue
-        else:
-            stages = (e["stage"],)
+        stages = line["stages"]
         for st in stages:
             m = mins_for(e["prod_order_no"], st)
             if m:

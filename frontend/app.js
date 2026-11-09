@@ -391,6 +391,7 @@
       loadSubBoard(),
       loadCavities(),
       loadPowdercoat(),
+      loadWork(),
       loadSettings(),
       loadStatus(),
       loadWhoAmI(),
@@ -1843,7 +1844,58 @@
   // is what costs time on the line.
 
   const PCS_WINDOW_DAYS = 5;
-  const PCS_LANE_LABELS = Object.fromEntries(SUB_LANES.map((l) => [l.id, l.label]));
+
+  // Each job's progress at the floor's four powdercoat steps, by PRO.
+  function pcsRowMap() {
+    const rows = state.powdercoat.rows || [];
+    if (state.pcs.rowsFrom !== rows) {
+      state.pcs.rowsFrom = rows;
+      state.pcs.rowMap = new Map(rows.map((r) => [r.prod_order_no, r]));
+    }
+    return state.pcs.rowMap;
+  }
+
+  // How many of a job's units are past each step: still to pick, picked and
+  // waiting on Prep, and so on. A job BC has closed counts as through them all.
+  function pcsPassed(j) {
+    const row = pcsRowMap().get(j.prod_order_no);
+    const total = row ? row.total_qty || 0 : j.remaining_qty || j.qty || 0;
+    let cap = total;
+    const passed = PC_STAGES.map((st) => {
+      cap = row && row.status === "completed" ? total : Math.min(cap, row ? row[`${st}_done`] || 0 : 0);
+      return cap;
+    });
+    return { total, passed };
+  }
+
+  const pcsFinished = (j) => {
+    const { total, passed } = pcsPassed(j);
+    return total > 0 && passed[passed.length - 1] >= total;
+  };
+
+  // The step a job's earliest units are waiting at: what Holding says it's up to.
+  function pcsCurrentStage(j) {
+    const { total, passed } = pcsPassed(j);
+    for (let i = 0; i < PC_STAGES.length; i++) {
+      if ((i === 0 ? total : passed[i - 1]) - passed[i] > 0.001) return PC_STAGES[i];
+    }
+    return PC_STAGES[PC_STAGES.length - 1];
+  }
+
+  // A job laid down its day: one piece per step that has units waiting at it,
+  // with Pack also keeping the finished units, ticked. Each piece is a copy of
+  // the job carrying only its own quantity, so the colour batches add up.
+  function pcsPieces(j) {
+    const { total, passed } = pcsPassed(j);
+    const out = [];
+    PC_STAGES.forEach((st, i) => {
+      const waiting = (i === 0 ? total : passed[i - 1]) - passed[i];
+      const finished = i === PC_STAGES.length - 1 ? passed[i] : 0;
+      const qty = waiting + finished;
+      if (qty > 0.001) out.push(Object.assign({}, j, { pcStage: st, remaining_qty: qty, pieceDone: finished }));
+    });
+    return out;
+  }
 
   function pcsColourKey(j) {
     if (j.colour) return j.colour.key;
@@ -1874,13 +1926,16 @@
   }
 
   function pcsCardHTML(j, showStatus) {
+    const done = j.pcStage && j.pieceDone >= j.remaining_qty - 0.001;
+    const behind = j.pcStage && !done && j.scheduled_date && j.scheduled_date.slice(0, 10) < dateKey(new Date());
+    const stage = j.pcStage || pcsCurrentStage(j);
     const due = j.due_date
       ? j.overdue
         ? `<span class="text-critical">Due ${fmtDate(j.due_date)}</span>`
         : `Due ${fmtDate(j.due_date)}`
       : "No due date";
     const eta = j.eta_date ? ` · ETA ${fmtDate(j.eta_date)}` : "";
-    return `<div class="sub-card pc-card" draggable="true" data-pro="${j.prod_order_no}" data-wc="${j.work_centre_no}">
+    return `<div class="sub-card pc-card${done ? " is-pc-done" : ""}${behind ? " is-card-behind" : ""}" draggable="true" data-pro="${j.prod_order_no}" data-wc="${j.work_centre_no}">
       <div class="sub-card-top">
         <span class="sub-card-pro">${j.prod_order_no}</span>
         <span class="sub-card-so">${soLabel(j.sales_order_no)}</span>
@@ -1895,8 +1950,10 @@
       </div>
       <div class="sub-card-line">${customerLabel(j.source_name)}</div>
       <div class="sub-card-muted">${j.item_description || ""}</div>
-      <div class="sub-card-muted">${due}${eta}</div>
-      ${showStatus ? `<span class="pc-status pc-status-${j.status}">${PCS_LANE_LABELS[j.status] || j.status}</span>` : ""}
+      <div class="sub-card-muted">${due}${eta}${done ? ' · <span class="sc-done">✓ finished</span>' : j.pieceDone ? ` · ${fmtNum(j.pieceDone)} finished` : ""}</div>
+      ${showStatus ? `<span class="pc-status pc-status-${stage}">At ${escapeAttr(stageLabel(stage))}</span>` : ""}
+      ${behind ? `<span class="sc-behind">Behind — ${fmtDayDate(parseDateKey(j.scheduled_date.slice(0, 10)))}</span>` : ""}
+      ${workBadgeHTML(j.prod_order_no, stage)}
     </div>`;
   }
 
@@ -1943,8 +2000,8 @@
       .join("");
   }
 
-  // Holding is the work still to plan: anything not on a day and not coated.
-  const pcsHeld = (jobs) => jobs.filter((j) => !j.scheduled_date && j.status !== "ready");
+  // Holding is the work still to plan: anything not on a day and not finished.
+  const pcsHeld = (jobs) => jobs.filter((j) => !j.scheduled_date && !pcsFinished(j));
 
   function renderPcsSchedule() {
     const data = state.data.subBoard;
@@ -1998,22 +2055,23 @@
       d = addBusinessDays(d, 1);
     }
     const todayK = dateKey(nextOrSameBusinessDay(new Date()));
-    // A job left on a day that has gone by, still not coated, would otherwise
+    // A job left on a day that has gone by, still not finished, would otherwise
     // sit out of sight behind the Prev button.
-    const behind = all.filter((j) => j.scheduled_date && j.scheduled_date.slice(0, 10) < todayK && j.status !== "ready").length;
+    const behind = all.filter((j) => j.scheduled_date && j.scheduled_date.slice(0, 10) < todayK && !pcsFinished(j)).length;
     $("#pcs-range").textContent = `${fmtDayDate(days[0])} – ${fmtDayDate(days[days.length - 1])}`;
-    $("#pcs-behind").textContent = behind ? `${behind} job${behind === 1 ? "" : "s"} on earlier days not coated yet` : "";
+    $("#pcs-behind").textContent = behind ? `${behind} job${behind === 1 ? "" : "s"} on earlier days not finished yet` : "";
 
     $("#pcs-board").innerHTML = days
       .map((day) => {
         const dKey = dateKey(day);
         const dayJobs = all.filter((j) => j.scheduled_date && j.scheduled_date.slice(0, 10) === dKey);
-        const colourCount = new Set(dayJobs.filter((j) => j.status !== "ready").map(pcsColourKey)).size;
-        const sections = SUB_LANES.map((lane) => {
-          const laneJobs = dayJobs.filter((j) => j.status === lane.id);
-          return `<div class="schedule-stage-section pc-section-${lane.id}">
-            <div class="schedule-stage-label">${lane.label}${laneJobs.length ? " — " + fmtQtyTotals(laneJobs) : ""}</div>
-            <div class="schedule-dropzone pcs-dropzone" data-date="${dKey}" data-status="${lane.id}">${pcsGroupsHTML(laneJobs, dKey + "|" + lane.id, false)}</div>
+        const pieces = dayJobs.flatMap(pcsPieces);
+        const colourCount = new Set(dayJobs.filter((j) => !pcsFinished(j)).map(pcsColourKey)).size;
+        const sections = PC_STAGES.map((st) => {
+          const here = pieces.filter((p) => p.pcStage === st);
+          return `<div class="schedule-stage-section pc-section-${st}">
+            <div class="schedule-stage-label">${escapeAttr(stageLabel(st))}${here.length ? " — " + fmtQtyTotals(here) : ""}</div>
+            <div class="schedule-dropzone pcs-dropzone" data-date="${dKey}">${pcsGroupsHTML(here, dKey + "|" + st, false)}</div>
           </div>`;
         }).join("");
         return `<div class="schedule-day ${dKey === todayK ? "is-today" : ""}">
@@ -2028,6 +2086,7 @@
       .join("");
 
     wirePcsBoard();
+    renderNowStrip($("#pcs-now"), "powdercoat");
   }
 
   function wirePcsControls() {
@@ -2124,10 +2183,9 @@
         const jobs = (d && d.jobs) || [];
         if (!jobs.length) return;
         // Holding keeps where a job is up to; a day sets both the day and that.
-        const fields = zone.dataset.date === HOLDING_DATE
-          ? { scheduled_date: HOLDING_DATE }
-          : { scheduled_date: zone.dataset.date, status: zone.dataset.status };
-        await saveSubStatus(jobs, fields);
+        // Only the day is set here. Which section a job sits in is how far the
+        // floor has got with it.
+        await saveSubStatus(jobs, { scheduled_date: zone.dataset.date });
       });
     });
 
@@ -2137,8 +2195,10 @@
   }
 
   function printPcsDay(dKey) {
-    const jobs = ((state.data.subBoard && state.data.subBoard.jobs) || [])
-      .filter((j) => j.scheduled_date && j.scheduled_date.slice(0, 10) === dKey && j.status !== "ready");
+    const pieces = ((state.data.subBoard && state.data.subBoard.jobs) || [])
+      .filter((j) => j.scheduled_date && j.scheduled_date.slice(0, 10) === dKey)
+      .flatMap(pcsPieces)
+      .filter((p) => p.pieceDone < p.remaining_qty - 0.001);
     const dayDate = parseDateKey(dKey);
     const now = new Date();
     let html = printHeaderHTML(
@@ -2149,9 +2209,9 @@
         "Printed " + now.toLocaleDateString() + " " + now.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" }),
       ]
     );
-    for (const lane of SUB_LANES.filter((l) => l.id !== "ready")) {
-      const laneJobs = jobs.filter((j) => j.status === lane.id);
-      html += `<div class="print-stage-block"><h3>${lane.label} &nbsp;·&nbsp; ${laneJobs.length} job${laneJobs.length === 1 ? "" : "s"}, ${fmtQtyTotals(laneJobs)}</h3>`;
+    for (const st of PC_STAGES) {
+      const laneJobs = pieces.filter((p) => p.pcStage === st);
+      html += `<div class="print-stage-block"><h3>${escapeAttr(stageLabel(st))} &nbsp;·&nbsp; ${laneJobs.length} job${laneJobs.length === 1 ? "" : "s"}, ${fmtQtyTotals(laneJobs)}</h3>`;
       if (!laneJobs.length) {
         html += '<div class="print-empty">Nothing planned</div></div>';
         continue;
@@ -2389,7 +2449,8 @@
   const OPTIONAL_FACTORY_STAGES = [];
 
   // Powdercoating is coated in house, so the floor ticks it off too.
-  const PC_STAGES = ["pc_prep", "pc_coat", "pc_pack"];
+  const PC_STAGES = ["pc_pick", "pc_prep", "pc_coat", "pc_pack"];
+  const FLOOR_ORDER = () => [...FACTORY_STAGES, ...CAV_STAGES, ...PC_STAGES];
 
   // A tick carries its stage, which is enough to say which line it belongs to.
   const lineForStage = (stage) =>
@@ -2428,7 +2489,7 @@
         finalStage: PC_STAGES[PC_STAGES.length - 1],
         progressUrl: "/api/powdercoat/progress",
         unit: ["item", "items"],
-        stagesText: "Prep, Coat and Pack",
+        stagesText: "Picking material, Prep, Coat and Pack",
         exportName: "Production Scheduler export (Powdercoating)",
         labels: false,
       };
@@ -2489,16 +2550,35 @@
     const completeBtn = complete
       ? ""
       : `<button type="button" class="stage-complete-btn" data-pro="${r.prod_order_no}" data-stage="${stage}" title="Mark all ${fmtNum(total)} done">✓</button>`;
+    const on = workFor(r.prod_order_no, stage);
+    const mine = on.some(isMine);
+    const workBtn = complete
+      ? ""
+      : `<button type="button" class="stage-work-btn ${mine ? "is-on" : ""}" data-pro="${r.prod_order_no}" data-stage="${stage}" data-work="${mine ? "stop" : "start"}" title="${mine ? "Stop working on this" : "Start working on this now"}">${mine ? "■ Stop" : "▶ Start"}</button>`;
     return `<div class="stage-cell">
       <input type="number" class="stage-input ${complete ? "is-complete" : ""}" data-pro="${r.prod_order_no}" data-stage="${stage}" min="0" max="${total}" step="1" value="${done}">
       <span class="stage-total">/ ${fmtNum(total)}</span>
       ${completeBtn}
+      ${workBtn}
+      ${complete ? "" : workBadgeHTML(r.prod_order_no, stage)}
     </div>`;
   }
 
   function wireStageControls(container) {
     $$(".stage-input", container).forEach((input) => {
       input.addEventListener("change", () => onStageInputChange(input));
+    });
+    $$(".stage-work-btn", container).forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        btn.disabled = true;
+        try {
+          await postJSON(`/api/work/${btn.dataset.work}`, { prod_order_no: btn.dataset.pro, stage: btn.dataset.stage });
+        } catch (e) {
+          if (!e.needsSignIn) notifyError(e, "Couldn't save that.");
+        }
+        await loadWork();
+        render();
+      });
     });
     $$(".stage-complete-btn", container).forEach((btn) => {
       btn.addEventListener("click", () => {
@@ -2532,7 +2612,7 @@
   const STAGE_LABELS = { picking: "Picking", machining: "Machining", build_wrap: "Build/Wrap",
     cut_to_size: "Cut to size", components: "Components", build: "Build", wrap: "Wrap",
     cav_prep: "Prep", cav_make: "Make",
-    pc_prep: "Prep", pc_coat: "Coat", pc_pack: "Pack" };
+    pc_pick: "Picking material", pc_prep: "Prep", pc_coat: "Coat", pc_pack: "Pack" };
   function stageLabel(stage) {
     return STAGE_LABELS[stage] || capitalize(stage);
   }
@@ -2608,6 +2688,7 @@
       const nowCompleted = !!row.posted || row[`${line.finalStage}_done`] >= row.total_qty;
       row.status = nowCompleted ? "completed" : "in_production";
       row.completed_at = nowCompleted ? row.completed_at || new Date().toISOString() : null;
+      await loadWork();
       renderFactory();
     } catch (e) {
       input.classList.remove("is-saving");
@@ -2798,6 +2879,7 @@
   }
 
   function renderFactory() {
+    renderNowStrip($("#factory-now"), floorLine().id);
     const line = floorLine();
     const data = line.data;
     const statsEl = $("#factory-stats");
@@ -3052,6 +3134,16 @@
   // the doors, and how many have passed each stage. Day hours, locks and the
   // locked-day score are measured on that, not on the stage the doors sit in.
   function buildScheduleCells(factoryRows) {
+    return buildPieceCells(factoryRows, {
+      firstStage: FACTORY_STAGES[0],
+      stagesOf: stagesOfRow,
+      entries: state.schedule.entries,
+      customerOf: boardCustomerLabel,
+    });
+  }
+
+  // The same for any line booked by its first step: doors, and cavities.
+  function buildPieceCells(factoryRows, { firstStage, stagesOf, entries: allEntries, customerOf }) {
     const map = new Map();
     const booked = new Map();
     map.booked = booked;
@@ -3066,9 +3158,9 @@
       map.get(key).push(card);
     };
 
-    const first = FACTORY_STAGES[0];
+    const first = firstStage;
     const bookingsByPro = new Map();
-    for (const e of state.schedule.entries) {
+    for (const e of allEntries) {
       if (e.stage !== first) continue;
       if (!bookingsByPro.has(e.prod_order_no)) bookingsByPro.set(e.prod_order_no, []);
       bookingsByPro.get(e.prod_order_no).push(e);
@@ -3081,7 +3173,7 @@
       const pro = row.prod_order_no;
       const total = row.total_qty || 0;
       if (total <= 0) continue;
-      const stages = stagesOfRow(row);
+      const stages = stagesOf(row);
 
       // How many doors have got past each stage. A later stage can't be ahead
       // of an earlier one (the server refuses that), but clamp anyway so one
@@ -3107,7 +3199,7 @@
       const base = {
         pro,
         so: row.sales_order_no,
-        customer: boardCustomerLabel(row),
+        customer: customerOf(row),
         wm: row.wm_number || null,
         posted: !!row.posted,
         item: row.item_summary,
@@ -3239,6 +3331,7 @@
       <span class="sc-meta">${fmtNum(card.qty)}× ${card.customer || ""}</span>
       <span class="sc-meta">Due ${dueText || "—"}${progressText}</span>
       ${behindText}
+      ${done ? "" : workBadgeHTML(card.pro, card.stage)}
     </div>`;
   }
 
@@ -4323,6 +4416,7 @@
     wireWmFlags();
     wireDayLocks(cardsByCell);
     wireBoardScrollTop("schedule-scroll-top", "schedule-board");
+    renderNowStrip($("#schedule-now"), "doors");
     wireDayPickers();
     renderScheduleSelection();
     renderResetBar();
@@ -4691,8 +4785,8 @@
     const idx = stages.indexOf(stage);
     if (idx <= 0) return null;
     const prev = stages[idx - 1];
-    // Door stages share their day by design, so there's nothing to flag.
-    if (FACTORY_STAGES.includes(stage)) return { prev };
+    // Door and cavity steps share their day by design, so there's nothing to flag.
+    if (FACTORY_STAGES.includes(stage) || CAV_STAGES.includes(stage)) return { prev };
     const entries = state.schedule.entries.filter((e) => e.prod_order_no === pro && e.stage === prev);
     if (!entries.length) return { icon: "⚠", why: `${stageLabel(prev)} isn't scheduled at all`, prev };
     const earliest = entries.map((e) => e.scheduled_date).sort()[0];
@@ -4709,7 +4803,8 @@
   // Blocks for one area: sales orders end to end, in board order.
   function ganttRow(stage, dKey) {
     // A door job is booked as Picking and runs every stage on that day.
-    const booking = FACTORY_STAGES.includes(stage) ? FACTORY_STAGES[0] : stage;
+    const booking = FACTORY_STAGES.includes(stage) ? FACTORY_STAGES[0]
+      : CAV_STAGES.includes(stage) ? CAV_STAGES[0] : stage;
     const entries = state.schedule.entries
       .filter((e) => e.stage === booking && e.scheduled_date === dKey)
       .sort((a, b) => (a.sequence - b.sequence) || String(a.sales_order_no).localeCompare(String(b.sales_order_no)));
@@ -6471,6 +6566,59 @@
     }
   }
 
+  // ---------- who's working on what ----------
+  //
+  // Start on the floor opens a session for that person on a job at a step;
+  // finishing the step, or Stop, closes it. The open ones are what's in
+  // production right now.
+
+  async function loadWork() {
+    try {
+      state.work = (await fetchJSON("/api/work/active")).sessions || [];
+    } catch (e) {
+      state.work = [];
+    }
+  }
+
+  function workFor(pro, stage) {
+    return (state.work || []).filter((s) => s.prod_order_no === pro && s.stage === stage);
+  }
+
+  const isMine = (s) => !!state.user && s.username.toLowerCase() === state.user.toLowerCase();
+
+  function clockOf(iso) {
+    const d = new Date(iso);
+    return isNaN(d) ? "" : d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+  }
+
+  function workBadgeHTML(pro, stage) {
+    const on = workFor(pro, stage);
+    if (!on.length) return "";
+    const names = [...new Set(on.map((s) => s.username))].join(", ");
+    return `<span class="work-badge" title="${escapeAttr(stageLabel(stage))} started by ${escapeAttr(names)}">▶ ${escapeAttr(names)} · ${clockOf(on[0].started_at)}</span>`;
+  }
+
+  // The strip above a board: everything started on that line and not finished.
+  function renderNowStrip(el, lineId) {
+    if (!el) return;
+    const on = (state.work || []).filter((s) => s.line === lineId);
+    const byJob = new Map();
+    for (const s of on) {
+      const k = `${s.prod_order_no}|${s.stage}`;
+      if (!byJob.has(k)) byJob.set(k, { pro: s.prod_order_no, stage: s.stage, names: [], since: s.started_at });
+      const j = byJob.get(k);
+      j.names.push(s.username);
+      if (s.started_at < j.since) j.since = s.started_at;
+    }
+    const order = FLOOR_ORDER();
+    const chips = [...byJob.values()]
+      .sort((a, b) => order.indexOf(a.stage) - order.indexOf(b.stage) || a.since.localeCompare(b.since))
+      .map((j) => `<span class="now-chip" title="Started ${clockOf(j.since)}">
+          <b>${escapeAttr(j.pro)}</b> ${escapeAttr(stageLabel(j.stage))} · ${escapeAttr(j.names.join(", "))} · ${clockOf(j.since)}</span>`)
+      .join("");
+    el.innerHTML = `<span class="now-label">In production now</span>${chips || '<span class="now-empty">Nothing started</span>'}`;
+  }
+
   async function loadCavities() {
     try {
       const d = await fetchJSON("/api/cavities");
@@ -6487,94 +6635,28 @@
     return state.schedule.entries.filter((e) => CAV_STAGES.includes(e.stage));
   }
 
-  // Same chaining as the door board: Make follows Prep, and a card parked in
-  // Holding takes everything downstream with it.
+  // One card per job, as on the door board: booked by Prep, its units sit down
+  // the day in Prep or Make by how far each has got.
   function buildCavityCells(rows) {
-    const map = new Map();
-    const push = (dKey, stage, card) => {
-      // Same rule as the doors: a posted job keeps its place on the days it was
-      // planned and worked, but has no business in Holding, which is a list of
-      // work still to do.
-      if (card.posted && dKey === HOLDING_DATE) return;
-      const key = dKey + "|" + stage;
-      if (!map.has(key)) map.set(key, []);
-      map.get(key).push(card);
-    };
-
-    const byProStage = new Map();
-    for (const e of cavEntries()) {
-      const k = e.prod_order_no + "|" + e.stage;
-      if (!byProStage.has(k)) byProStage.set(k, []);
-      byProStage.get(k).push(e);
-    }
-
-    for (const row of rows) {
-      const pro = row.prod_order_no;
-      let prevDateKey = null;
-
-      for (const stage of CAV_STAGES) {
-        const total = row.total_qty || 0;
-        const done = row[stage + "_done"] || 0;
-        const stageComplete = total > 0 && done >= total;
-
-        const explicit = byProStage.get(pro + "|" + stage) || [];
-        const explicitSum = explicit.reduce((a, e) => a + e.qty, 0);
-        const explicitDated = explicit.filter((e) => e.scheduled_date !== HOLDING_DATE);
-        const explicitHeld = explicit.length > 0 && explicitDated.length === 0;
-        const earliestDated = explicitDated.length
-          ? explicitDated.reduce((min, e) => (e.scheduled_date < min ? e.scheduled_date : min), explicitDated[0].scheduled_date)
-          : null;
-
-        const base = {
-          pro,
-          so: row.sales_order_no,
-          stage,
-          customer: customerLabel(row.source_name),
-          wm: row.wm_number || null,
-          posted: !!row.posted,
-          item: row.item_summary,
-          due: row.due_date,
-        };
-
-        for (const e of explicit) {
-          push(e.scheduled_date, stage, Object.assign({}, base, { qty: e.qty, entryId: e.id, confirmed: true, stageComplete }));
-        }
-
-        let stageDateKey;
-        if (explicitDated.length > 0) stageDateKey = earliestDated;
-        else if (explicitHeld) stageDateKey = HOLDING_DATE;
-        else if (stage === CAV_STAGES[0]) stageDateKey = HOLDING_DATE;
-        else if (prevDateKey && prevDateKey !== HOLDING_DATE) stageDateKey = prevDateKey;
-        else stageDateKey = HOLDING_DATE;
-        prevDateKey = stageDateKey;
-
-        const leftover = Math.max(0, total - done - explicitSum);
-        const uncommitted = Math.max(0, total - explicitSum);
-        const qty = leftover > 0.001 ? leftover : stageComplete ? uncommitted : 0;
-        if (qty > 0.001) {
-          push(stageDateKey, stage, Object.assign({}, base, { qty, entryId: null, confirmed: false, stageComplete }));
-        }
-      }
-    }
-    return map;
-  }
-
-  function cavStageProgress(pro, stage) {
-    const r = state.cavities.rows.find((x) => x.prod_order_no === pro);
-    if (!r) return 0;
-    const total = r.total_qty || 0;
-    return total > 0 ? Math.min(r[stage + "_done"] || 0, total) / total : 0;
+    return buildPieceCells(rows, {
+      firstStage: CAV_STAGES[0],
+      stagesOf: () => CAV_STAGES,
+      entries: cavEntries(),
+      customerOf: (row) => customerLabel(row.source_name),
+    });
   }
 
   const CAV_TAG_LETTER = { cav_prep: "P", cav_make: "M" };
 
+  const CAV_VERBS = { cav_prep: "to prep", cav_make: "to make" };
+
   function cavCardHTML(c) {
-    const pct = cavStageProgress(c.pro, c.stage);
-    const done = pct >= 1;
-    const row = state.cavities.rows.find((x) => x.prod_order_no === c.pro) || {};
-    const total = row.total_qty || 0;
-    const doneQty = Math.min(row[c.stage + "_done"] || 0, total);
-    const cls = "schedule-card " + (c.confirmed ? "" : "is-suggested") + (done ? " is-stage-done" : "");
+    const p = pieceProgress(c);
+    const pct = p.pct;
+    const done = p.total > 0 && pct >= 1;
+    const behind = !done && !c.posted && c.dKey && c.dKey !== HOLDING_DATE && c.dKey < dateKey(new Date());
+    const cls = "schedule-card " + (c.confirmed ? "" : "is-suggested") + (done ? " is-stage-done" : "") +
+      (behind ? " is-card-behind" : "");
     const actions = c.confirmed
       ? '<span class="sc-actions">' +
         '<button class="sc-btn" type="button" data-cav-action="split" title="Split this chunk">✂</button>' +
@@ -6582,26 +6664,30 @@
         "</span>"
       : "";
     const progressText = done
-      ? ' · <span class="sc-done">✓ ' + CAV_LABELS[c.stage].toLowerCase() + " done</span>"
-      : total > 0
-        ? " · " + fmtNum(doneQty) + "/" + fmtNum(total) + " " + CAV_LABELS[c.stage].toLowerCase()
-        : "";
+      ? ' · <span class="sc-done">✓ finished</span>'
+      : p.done > 0
+        ? " · " + fmtNum(p.done) + "/" + fmtNum(p.total) + " finished"
+        : " · " + CAV_VERBS[c.stage];
     return '<div class="' + cls + '"' + progressFillStyle(pct) +
       ' draggable="true" data-cav="1" data-pro="' + c.pro + '" data-stage="' + c.stage +
-      '" data-qty="' + c.qty + '" data-entry-id="' + (c.entryId == null ? "" : c.entryId) +
+      '" data-book-stage="' + (c.bookStage || c.stage) + '" data-day="' + (c.dKey || "") +
+      '" data-qty="' + c.qty + '" data-chunk-qty="' + (c.chunkQty == null ? c.qty : c.chunkQty) +
+      '" data-entry-id="' + (c.entryId == null ? "" : c.entryId) +
       '" data-confirmed="' + c.confirmed + '"' +
-      ' title="' + CAV_LABELS[c.stage] + " — " + fmtNum(doneQty) + " of " + fmtNum(total) +
-      " done — " + escapeAttr(c.item || "") + '">' +
+      ' title="' + CAV_LABELS[c.stage] + " — " + fmtNum(c.qty) + " here" +
+      (p.done ? ", " + fmtNum(p.done) + " finished" : "") + " — " + escapeAttr(c.item || "") + '">' +
       actions +
       '<span class="stage-dot" title="' + CAV_LABELS[c.stage] + '">' + CAV_TAG_LETTER[c.stage] + "</span>" +
       '<span class="sc-pro">' + c.pro + "</span>" +
       '<span class="sc-so">' + (c.so || "") + "</span>" +
       '<span class="sc-meta">' + fmtNum(c.qty) + "× " + (c.customer || "") + "</span>" +
       '<span class="sc-meta">Due ' + (c.due ? fmtDate(c.due) : "—") + progressText + "</span>" +
+      (behind ? '<span class="sc-behind">Behind — ' + fmtDayDate(parseDateKey(c.dKey)) + "</span>" : "") +
+      workBadgeHTML(c.pro, c.stage) +
       "</div>";
   }
 
-  function cavCardsHTML(cards, dKey) {
+  function cavCardsHTML(cards, dKey, stage) {
     if (!cards.length) return "";
     const groups = new Map();
     for (const c of cards) {
@@ -6620,12 +6706,15 @@
 
     return entries
       .map(([so, list]) => {
-        const key = "cav:" + dKey + "|" + so;
+        const key = "cav:" + dKey + "|" + (stage || "") + "|" + so;
         const isOpen = state.expanded.has(key);
         const units = list.reduce((s, c) => s + c.qty, 0);
         const pros = new Set(list.map((c) => c.pro)).size;
-        const pct = list.reduce((s, c) => s + cavStageProgress(c.pro, c.stage), 0) / list.length;
-        const payload = list.map((c) => ({ pro: c.pro, stage: c.stage, qty: c.qty, entryId: c.entryId, confirmed: c.confirmed }));
+        const pct = list.reduce((s, c) => s + pieceProgress(c).pct, 0) / list.length;
+        const payload = list.map((c) => ({
+          pro: c.pro, stage: c.stage, bookStage: c.bookStage, day: c.dKey,
+          qty: c.qty, chunkQty: c.chunkQty, entryId: c.entryId, confirmed: c.confirmed,
+        }));
         const { badge, posted } = orderBadge(list, so);
 
         const body = isOpen
@@ -6708,8 +6797,8 @@
           const units = cards.reduce((s, c) => s + c.qty, 0);
           return '<div class="schedule-stage-section">' +
             '<div class="schedule-stage-label">' + CAV_LABELS[st] + (cards.length ? " — " + fmtNum(units) : "") + "</div>" +
-            '<div class="schedule-dropzone cav-dropzone" data-date="' + dKey + '" data-stages="' + st + '">' +
-            cavCardsHTML(cards, dKey) + "</div></div>";
+            '<div class="schedule-dropzone cav-dropzone" data-date="' + dKey + '" data-stages="' + CAV_STAGES.join(",") + '">' +
+            cavCardsHTML(cards, dKey, st) + "</div></div>";
         }).join("");
         return '<div class="schedule-day ' + (dKey === todayK ? "is-today" : "") + '">' +
           '<div class="schedule-day-head"><span>' + fmtDayDate(day) + "</span>" +
@@ -6719,6 +6808,7 @@
       .join("");
 
     wireCavityBoard();
+    renderNowStrip($("#cavities-now"), "cavities");
   }
 
   function wireCavityBoard() {
@@ -6726,13 +6816,7 @@
       el.addEventListener("dragstart", (e) => {
         const payload = el.dataset.groupCards
           ? { type: "group", cards: JSON.parse(el.dataset.groupCards) }
-          : {
-              type: "card",
-              pro: el.dataset.pro,
-              stage: el.dataset.stage,
-              qty: Number(el.dataset.qty),
-              entryId: el.dataset.entryId || null,
-            };
+          : cardDataOf(el, "card");
         e.dataTransfer.setData("text/plain", JSON.stringify(payload));
         e.dataTransfer.effectAllowed = "move";
         e.stopPropagation();
@@ -6770,10 +6854,10 @@
         try {
           // one at a time: two concurrent creates for the same PRO and stage can
           // each read "nothing scheduled yet" and double-book it
+          const taken = new Map();
           for (const c of cards) {
             if (!allowed.includes(c.stage)) continue;
-            if (c.entryId) await postJSON("/api/schedule/" + c.entryId + "/move", { date: target });
-            else await postJSON("/api/schedule", { prod_order_no: c.pro, stage: c.stage, date: target, qty: c.qty });
+            await applyCardMove(c, target, taken);
           }
           $("#cavities-error").hidden = true;
           await Promise.all([loadSchedule(), loadCavities()]);
@@ -6800,7 +6884,8 @@
         const action = btn.dataset.cavAction;
         try {
           if (action === "remove") {
-            await apiDelete("/api/schedule/" + entryId);
+            // only these units go back to Holding; the rest keep their day
+            await applyCardMove(cardDataOf(card), HOLDING_DATE);
           } else {
             const total = Number(card.dataset.qty);
             const qtyStr = prompt(

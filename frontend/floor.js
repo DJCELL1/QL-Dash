@@ -14,20 +14,49 @@
     picking: "Picking",
     machining: "Machining",
     build_wrap: "Build/Wrap",
+    cav_prep: "Prep",
+    cav_make: "Make",
+    pc_pick: "Picking material",
+    pc_prep: "Prep",
+    pc_coat: "Coat",
+    pc_pack: "Pack",
   };
 
-  const FALLBACK_STAGES = ["picking", "machining", "build_wrap"];
+  // The three lines the floor works, each read and ticked through its own pair
+  // of endpoints, the same ones the dashboard's Factory floor tab uses.
+  const LINES = {
+    doors: {
+      url: "/api/factory", progress: "/api/factory/progress",
+      stages: ["picking", "machining", "build_wrap"], unit: ["door", "doors"],
+    },
+    cavities: {
+      url: "/api/cavities", progress: "/api/cavities/progress",
+      stages: ["cav_prep", "cav_make"], unit: ["unit", "units"],
+    },
+    powdercoat: {
+      url: "/api/powdercoat", progress: "/api/powdercoat/progress",
+      stages: ["pc_pick", "pc_prep", "pc_coat", "pc_pack"], unit: ["item", "items"],
+    },
+  };
+
+  const savedLine = (() => {
+    try { return localStorage.getItem("floorAppLine"); } catch (e) { return null; }
+  })();
+  const line = () => LINES[state.line] || LINES.doors;
+  const unitWord = (n) => (n === 1 ? line().unit[0] : line().unit[1]);
 
   // Glazing and edge stripping only apply to doors whose description carries
   // the marker, so the server sends each job its own list and the card follows
   // that rather than assuming four.
   function stagesOf(row) {
-    const keys = (row && row.stages && row.stages.length ? row.stages : FALLBACK_STAGES)
+    const keys = (row && row.stages && row.stages.length ? row.stages : line().stages)
       .filter((k) => STAGE_LABELS[k]);
     return keys.map((key) => ({ key, label: STAGE_LABELS[key] }));
   }
 
   const state = {
+    line: LINES[savedLine] ? savedLine : "doors",
+    work: [],        // who's started what, from /api/work/active
     rows: [],
     todayPros: new Set(),
     scope: "today",
@@ -53,18 +82,35 @@
   }
 
   async function load() {
-    const [factory, schedule] = await Promise.all([
-      getJSON("/api/factory"),
+    const ln = line();
+    const [data, schedule, subs, work] = await Promise.all([
+      getJSON(ln.url).catch(() => ({ rows: [] })),
       // Not fatal — without it "Today" is simply empty and All open still works.
       getJSON("/api/schedule").catch(() => ({ entries: [] })),
+      state.line === "powdercoat" ? getJSON("/api/subcontractors").catch(() => ({ jobs: [] })) : null,
+      getJSON("/api/work/active").catch(() => ({ sessions: [] })),
     ]);
-    state.rows = factory.rows || [];
+    state.rows = data.rows || [];
+    state.work = work.sessions || [];
     const key = todayKey();
+    // Powdercoat jobs carry their day on the job itself; doors and cavities
+    // are booked in the schedule.
     state.todayPros = new Set(
-      (schedule.entries || [])
-        .filter((e) => e.scheduled_date === key)
-        .map((e) => e.prod_order_no)
+      subs
+        ? (subs.jobs || []).filter((j) => (j.scheduled_date || "").slice(0, 10) === key).map((j) => j.prod_order_no)
+        : (schedule.entries || []).filter((e) => e.scheduled_date === key).map((e) => e.prod_order_no)
     );
+  }
+
+  function workOn(pro, stage) {
+    return state.work.filter((s) => s.prod_order_no === pro && s.stage === stage);
+  }
+
+  const isMine = (s) => state.user && s.username.toLowerCase() === state.user.toLowerCase();
+
+  function clockOf(iso) {
+    const d = new Date(iso);
+    return Number.isNaN(d.getTime()) ? "" : d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
   }
 
   // ---------- helpers ----------
@@ -145,14 +191,16 @@
 
     const doors = rows.reduce((s, r) => s + (r.total_qty || 0), 0);
     $("#summary").textContent = rows.length
-      ? `${rows.length} ${rows.length === 1 ? "job" : "jobs"} · ${num(doors)} doors`
+      ? `${rows.length} ${rows.length === 1 ? "job" : "jobs"} · ${num(doors)} ${unitWord(doors)}`
       : "";
 
-    // Headline for the wall screen — the two numbers worth reading from across
-    // the room: how many doors are on today, and how many are through Make.
-    const made = rows.reduce((s, r) => s + Math.min(doneFor(r, FALLBACK_STAGES[0]), r.total_qty || 0), 0);
+    // Headline for the wall screen: what's being worked on right now, then how
+    // far today's list is through its last step.
+    const last = line().stages[line().stages.length - 1];
+    const through = rows.reduce((s, r) => s + Math.min(doneFor(r, last), r.total_qty || 0), 0);
+    const working = new Set(state.work.filter((s) => line().stages.includes(s.stage)).map((s) => s.prod_order_no)).size;
     $("#headline").textContent = rows.length
-      ? `${num(made)} of ${num(doors)} made`
+      ? `${working ? `▶ ${working} in progress · ` : ""}${num(through)} of ${num(doors)} finished`
       : "";
 
     if (!rows.length) {
@@ -190,13 +238,15 @@
       <button type="button" class="job-head" data-pro="${esc(row.prod_order_no)}"
               aria-expanded="${open ? "true" : "false"}">
         <span class="job-pro">${esc(row.prod_order_no)}</span>
-        <span class="job-qty">${num(row.total_qty)} ${row.total_qty === 1 ? "door" : "doors"}</span>
-        <span class="job-customer">${esc(row.source_name || "Stock Door")}</span>
+        <span class="job-qty">${num(row.total_qty)} ${unitWord(row.total_qty)}</span>
+        <span class="job-customer">${esc(row.source_name || "Stock")}</span>
         <span class="job-item">${esc(row.item_summary || "")}</span>
         <span class="job-meta">
           ${row.sales_order_no ? `<span class="pill">${esc(row.sales_order_no)}</span>` : ""}
           ${due ? `<span class="pill ${due.late ? "late" : ""}">${esc(due.text)}</span>` : ""}
           ${complete ? '<span class="pill done">✓ Finished</span>' : ""}
+          ${stagesOf(row).filter((s) => workOn(row.prod_order_no, s.key).length)
+            .map((s) => `<span class="pill working">▶ ${esc(s.label)}</span>`).join("")}
         </span>
         <span class="job-stages">${stagesOf(row).map((s) => stageChipHTML(row, s)).join("")}</span>
       </button>
@@ -231,6 +281,23 @@
       ? `<p class="stage-note">Do ${stagesOf(row)[index - 1].label} first.</p>`
       : "";
 
+    // Start says this is what you're on now; it ends itself when the step is
+    // finished, or with Stop. Anyone else on it is named, and can be joined.
+    const on = workOn(row.prod_order_no, stage.key);
+    const mine = on.some(isMine);
+    const others = on.filter((s) => !isMine(s));
+    const who = others.length
+      ? `<span class="work-who">▶ ${esc(others.map((s) => s.username).join(", "))} since ${esc(clockOf(others[0].started_at))}</span>`
+      : "";
+    const workRow = complete
+      ? ""
+      : `<div class="work-row">
+          <button type="button" class="work-btn ${mine ? "is-on" : ""}" data-work="${mine ? "stop" : "start"}"
+                  ${busy || locked ? "disabled" : ""}>${mine ? "■ Stop" : "▶ Start"}</button>
+          ${mine ? `<span class="work-who">You since ${esc(clockOf(on.find(isMine).started_at))}</span>` : ""}
+          ${who}
+        </div>`;
+
     return `<div class="stage ${complete ? "is-complete" : ""} ${locked ? "is-locked" : ""}"
                  data-pro="${esc(row.prod_order_no)}" data-stage="${stage.key}">
       <div class="stage-top">
@@ -248,6 +315,7 @@
         <button type="button" class="all-btn" data-act="all"
                 ${busy || done >= max || max <= 0 ? "disabled" : ""}>All ${num(max)}</button>
       </div>
+      ${workRow}
       ${note}
     </div>`;
   }
@@ -270,6 +338,9 @@
       const row = state.rows.find((r) => r.prod_order_no === pro);
       if (!row) return;
       const index = stagesOf(row).findIndex((s) => s.key === stage);
+
+      const workBtn = el.querySelector(".work-btn");
+      if (workBtn) workBtn.addEventListener("click", () => startStop(row, stage, workBtn.dataset.work));
 
       el.querySelectorAll("[data-act]").forEach((btn) => {
         btn.addEventListener("click", () => {
@@ -294,6 +365,34 @@
     });
   }
 
+  async function startStop(row, stage, action) {
+    const key = `${row.prod_order_no}|${stage}`;
+    if (state.busy.has(key)) return;
+    state.busy.add(key);
+    render();
+    try {
+      const res = await fetch(`/api/work/${action}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prod_order_no: row.prod_order_no, stage }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (res.status === 401) {
+        openSignIn();
+        throw new Error("Sign in first, so we know who's on it.");
+      }
+      if (!res.ok) throw new Error(body.detail || "Couldn't save that.");
+      state.work = (await getJSON("/api/work/active")).sessions || [];
+      const label = STAGE_LABELS[stage] || stage;
+      toast(`${row.prod_order_no} · ${label} ${action === "start" ? "started" : "stopped"}`, "good");
+    } catch (err) {
+      toast(err.message, "bad");
+    } finally {
+      state.busy.delete(key);
+      render();
+    }
+  }
+
   async function save(row, stage, done) {
     const key = `${row.prod_order_no}|${stage}`;
     if (state.busy.has(key)) return;
@@ -301,7 +400,7 @@
     render();
 
     try {
-      const res = await fetch("/api/factory/progress", {
+      const res = await fetch(line().progress, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ prod_order_no: row.prod_order_no, stage, done: Math.max(0, done) }),
@@ -324,7 +423,9 @@
       const st = stagesOf(row);
       const sum = st.reduce((t, s) => t + doneFor(row, s.key), 0);
       row.pct_complete = total > 0 ? Math.round((sum / (total * st.length)) * 1000) / 10 : 0;
-      row.status = total > 0 && doneFor(row, FALLBACK_STAGES[FALLBACK_STAGES.length - 1]) >= total ? "completed" : "in_production";
+      row.status = total > 0 && doneFor(row, st[st.length - 1].key) >= total ? "completed" : "in_production";
+      // finishing a step ends anyone's Start on it, server side
+      state.work = (await getJSON("/api/work/active").catch(() => ({ sessions: state.work }))).sessions || [];
 
       const label = STAGE_LABELS[stage] || stage;
       toast(`${row.prod_order_no} · ${label} ${num(doneFor(row, stage))} of ${num(total)}`, "good");
@@ -395,6 +496,21 @@
       clearTimeout(debounce);
       applyScan(input.value);
       input.blur(); // a scan gun sends Enter — drop the keyboard so the job is visible
+    });
+
+    document.querySelectorAll("#lineToggle .seg").forEach((btn) => {
+      btn.classList.toggle("is-active", btn.dataset.line === state.line);
+      btn.addEventListener("click", () => {
+        if (btn.dataset.line === state.line) return;
+        state.line = btn.dataset.line;
+        try { localStorage.setItem("floorAppLine", state.line); } catch (e) { /* private mode */ }
+        document.querySelectorAll("#lineToggle .seg").forEach((b) => b.classList.toggle("is-active", b === btn));
+        state.rows = [];
+        state.openPro = null;
+        state.hitPro = null;
+        render();
+        load().then(render).catch(() => toast("Couldn't load that line.", "bad"));
+      });
     });
 
     document.querySelectorAll("#scope .seg").forEach((btn) => {

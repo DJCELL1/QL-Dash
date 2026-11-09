@@ -116,8 +116,12 @@ ticks logged under Build and Components were left as they were.
 
 ## The door board: one card per job
 
+Cavities work the same way through the same code (`buildPieceCells()`), booked
+by Prep alone; `_fold_cavity_bookings()` folded their old Make bookings once
+(flag `cavity_bookings_folded`).
+
 A door job is booked onto a day by Picking alone (`SCHEDULABLE_STAGES` takes
-only the first door stage). `buildScheduleCells()` then lays its doors down
+only the first door stage and the first cavity stage). `buildScheduleCells()` then lays its doors down
 that day by how far each has got: still to pick in Picking, picked in
 Machining, machined in Build/Wrap, and finished doors stay in Build/Wrap,
 ticked. Each door shows once. A job split across days fills its earliest day
@@ -150,7 +154,7 @@ its own endpoint pair and its own columns in `stage_progress`:
 |---|---|---|---|
 | Doors | the three above | `joinery` | `/api/factory/progress` |
 | Cavities | `cav_prep`, `cav_make` | `cavities` | `/api/cavities/progress` |
-| Powdercoating | `pc_prep`, `pc_coat`, `pc_pack` | `subcontractors` | `/api/powdercoat/progress` |
+| Powdercoating | `pc_pick`, `pc_prep`, `pc_coat`, `pc_pack` | `subcontractors` | `/api/powdercoat/progress` |
 
 `floorLineConfig()` in `frontend/app.js` is where a line is described, and
 `lineForStage()` maps a tick back to its line. All three enforce the same
@@ -166,14 +170,21 @@ subcontractor board deliberately avoids (see `fmtQtyTotals`).
 
 ## Powdercoat schedule and colours
 
+Picking material (`pc_pick`) is powdercoating's first floor step, ahead of
+Prep, Coat and Pack. When it was added, `pc_pick_done` was set from
+`pc_prep_done`, and `_seed_pc_pick()` once carried the old hand-set statuses
+across (flag `pc_pick_seeded`): Ready to coat and In powdercoating had their
+material picked, Coated was picked, prepped and coated.
+
 The Powdercoating tab opens on a **Day schedule** (`renderPcsSchedule()` in
-`app.js`): Holding, then the working week, each day split into the four
-statuses of `SUB_LANES`. Dropping a job on a day writes both
-`sub_job_status.scheduled_date` and its status in one call; dropping it in
-Holding clears the date and keeps the status. Holding is everything with no
-date that isn't Coated, sortable by colour batch (most jobs first), ETA
-(`eta_date`, else due) or due date. The older status lanes and the order list
-are the other two toggles.
+`app.js`): Holding, then the working week, each day split into those four
+floor steps. A job's day is `sub_job_status.scheduled_date`, one day per job
+with no splitting; dropping it sets only that. Which section its units sit in
+comes from floor progress (`pcsPieces()`), the same way as the door board, with
+finished units kept ticked in Pack and a gone-by day's unfinished work in red.
+Holding is everything with no date that isn't finished, sortable by colour
+batch (most jobs first), ETA (`eta_date`, else due) or due date. The older
+status lanes, still set by hand, and the order list are the other two toggles.
 
 Jobs gather by colour everywhere on that board. `backend/colours.py` resolves a
 job's BC `colour_code` / `colour_description` to a swatch: a colour set by hand
@@ -195,6 +206,23 @@ by `tools/extract_powder_colours.py`. Interpon prints RGB values. Dulux only has
 picture swatches, sampled from the images themselves, so they read slightly
 lighter than the paint. Clicking a tile sets a colour by hand; Settings lists
 and removes those.
+
+## Start and Stop: what's in production now
+
+`work_sessions` records who pressed Start on a job at a step, and when. Open
+rows (`ended_at` NULL) are what's being worked on now, served by
+`GET /api/work/active`; `POST /api/work/start` and `/api/work/stop` take
+`prod_order_no` and `stage`. Start is per person, so two people can be on one
+job; pressing it twice doesn't open a second session. Stop ends your own, or
+everyone's on that job and step when you had none (a supervisor clearing one
+left running). `_stop_if_finished()` ends every session on a step when a
+progress tick completes it, on all three lines. Closed rows keep the start and
+end times for timing jobs later; nothing reports on them yet.
+
+Start and Stop sit on each step of the phone app (`/floor`, which now switches
+between Doors, Cavities and Powdercoat) and on each stage cell of the Factory
+floor tab. A started job carries a green ▶ badge on its schedule card, and each
+board and the Factory floor tab has an "In production now" strip.
 
 ## Settings
 

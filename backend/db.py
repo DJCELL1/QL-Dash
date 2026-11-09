@@ -182,8 +182,24 @@ CREATE TABLE IF NOT EXISTS stage_progress (
     pc_prep_done REAL NOT NULL DEFAULT 0,
     pc_coat_done REAL NOT NULL DEFAULT 0,
     pc_pack_done REAL NOT NULL DEFAULT 0,
+    pc_pick_done REAL NOT NULL DEFAULT 0,
     updated_at TEXT NOT NULL
 );
+
+-- Who pressed Start on a job at a step, and when, until it's finished there or
+-- someone presses Stop. Open rows (ended_at NULL) are what's in production now;
+-- closed ones are how long the step really took.
+CREATE TABLE IF NOT EXISTS work_sessions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    prod_order_no TEXT NOT NULL,
+    stage TEXT NOT NULL,
+    username TEXT NOT NULL,
+    started_at TEXT NOT NULL,
+    ended_at TEXT,
+    ended_reason TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_work_open ON work_sessions (ended_at, prod_order_no, stage);
 
 CREATE TABLE IF NOT EXISTS schedule_entries (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -344,7 +360,8 @@ STAGE_COLUMNS = {
     # Cavities are a separate in-house line with two steps of their own.
     "cav_prep": "cav_prep_done",
     "cav_make": "cav_make_done",
-    # Powdercoating is a third in-house line, three steps.
+    # Powdercoating is a third in-house line: material picked, then three steps.
+    "pc_pick": "pc_pick_done",
     "pc_prep": "pc_prep_done",
     "pc_coat": "pc_coat_done",
     "pc_pack": "pc_pack_done",
@@ -357,6 +374,7 @@ def init_db() -> None:
         conn.executescript(SCHEMA)
         _add_missing_columns(conn)
         _fold_door_bookings(conn)
+        _fold_cavity_bookings(conn)
 
 
 def _add_missing_columns(conn) -> None:
@@ -381,7 +399,7 @@ def _add_missing_columns(conn) -> None:
                    "cut_to_size_done", "machining_done", "components_done",
                    "build_done", "wrap_done",
                    "pc_prep_done", "pc_coat_done", "pc_pack_done",
-                   "picking_done", "build_wrap_done"):
+                   "picking_done", "build_wrap_done", "pc_pick_done"):
         if column not in have:
             conn.execute(f"ALTER TABLE stage_progress ADD COLUMN {column} REAL NOT NULL DEFAULT 0")
             added.append(column)
@@ -396,6 +414,11 @@ def _add_missing_columns(conn) -> None:
     # the one moment to carry the old stages' history across.
     if "picking_done" in added:
         _merge_door_stages(conn)
+
+    # Picking material became powdercoating's first step. Anything already
+    # prepped has had its material picked.
+    if "pc_pick_done" in added:
+        conn.execute("UPDATE stage_progress SET pc_pick_done = pc_prep_done WHERE pc_prep_done > 0")
 
 
 def _fold_door_bookings(conn) -> None:
@@ -423,6 +446,19 @@ def _fold_door_bookings(conn) -> None:
     )
     conn.execute(f"DELETE FROM schedule_entries WHERE stage IN ({marks})", later)
     conn.execute("INSERT INTO app_settings (key, value) VALUES ('door_bookings_folded', '1')")
+
+
+def _fold_cavity_bookings(conn) -> None:
+    """The same once-only fold for cavities: booked by Prep alone, Make runs on
+    the same day."""
+    if conn.execute("SELECT 1 FROM app_settings WHERE key = 'cavity_bookings_folded'").fetchone():
+        return
+    conn.execute(
+        "UPDATE schedule_entries SET stage = 'cav_prep' WHERE stage = 'cav_make' AND prod_order_no NOT IN "
+        "(SELECT prod_order_no FROM schedule_entries WHERE stage = 'cav_prep')"
+    )
+    conn.execute("DELETE FROM schedule_entries WHERE stage = 'cav_make'")
+    conn.execute("INSERT INTO app_settings (key, value) VALUES ('cavity_bookings_folded', '1')")
 
 
 def _merge_door_stages(conn) -> None:
@@ -719,6 +755,68 @@ def set_stage_progress(prod_order_no: str, stage: str, done_qty: float, by_user:
         )
         cur = conn.execute("SELECT * FROM stage_progress WHERE prod_order_no = ?", (prod_order_no,))
         return dict(cur.fetchone())
+
+
+def raise_stage_progress(prod_order_no: str, values: dict[str, float]) -> None:
+    """Lift stored progress to at least these figures, without logging them
+    as work done today. For seeding a new step from what's already known."""
+    from datetime import datetime, timezone
+
+    now = datetime.now(timezone.utc).isoformat()
+    with get_conn() as conn:
+        conn.execute(
+            "INSERT OR IGNORE INTO stage_progress (prod_order_no, updated_at) VALUES (?, ?)", (prod_order_no, now)
+        )
+        for stage, qty in values.items():
+            column = STAGE_COLUMNS[stage]
+            conn.execute(
+                f"UPDATE stage_progress SET {column} = MAX({column}, ?) WHERE prod_order_no = ?",
+                (qty, prod_order_no),
+            )
+
+
+# ---------- who's working on what ----------
+
+
+def start_work(prod_order_no: str, stage: str, username: str) -> dict:
+    """Open a session for this person on this job and step, unless they
+    already have one open — pressing Start twice isn't two people."""
+    from datetime import datetime, timezone
+
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT * FROM work_sessions WHERE prod_order_no = ? AND stage = ? AND username = ? AND ended_at IS NULL",
+            (prod_order_no, stage, username),
+        ).fetchone()
+        if row:
+            return dict(row)
+        now = datetime.now(timezone.utc).isoformat()
+        cur = conn.execute(
+            "INSERT INTO work_sessions (prod_order_no, stage, username, started_at) VALUES (?, ?, ?, ?)",
+            (prod_order_no, stage, username, now),
+        )
+        return dict(conn.execute("SELECT * FROM work_sessions WHERE id = ?", (cur.lastrowid,)).fetchone())
+
+
+def end_work(prod_order_no: str, stage: str, reason: str, username: str | None = None) -> int:
+    """Close open sessions on a job and step: one person's, or everyone's."""
+    from datetime import datetime, timezone
+
+    now = datetime.now(timezone.utc).isoformat()
+    sql = ("UPDATE work_sessions SET ended_at = ?, ended_reason = ? "
+           "WHERE prod_order_no = ? AND stage = ? AND ended_at IS NULL")
+    args = [now, reason, prod_order_no, stage]
+    if username is not None:
+        sql += " AND username = ?"
+        args.append(username)
+    with get_conn() as conn:
+        return conn.execute(sql, args).rowcount
+
+
+def get_open_work() -> list[dict]:
+    with get_conn() as conn:
+        cur = conn.execute("SELECT * FROM work_sessions WHERE ended_at IS NULL ORDER BY started_at")
+        return [dict(r) for r in cur.fetchall()]
 
 
 def get_progress_events(date_from: str | None = None, date_to: str | None = None,

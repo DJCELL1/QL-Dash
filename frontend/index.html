@@ -125,7 +125,7 @@
           <h2>Powdercoat schedule</h2>
           <span class="updated-at" id="pcs-updated"></span>
         </div>
-        <p class="leveling-note">Jobs gather by colour, the biggest batch first. Drag a colour, or a single job, from Holding onto a day and into where it's up to. Moving it down the day changes that as it goes. Click a colour tile to set or correct its colour. Every job in that colour follows.</p>
+        <p class="leveling-note">Jobs gather by colour, the biggest batch first. Drag a colour, or a single job, from Holding onto a day. On its day a job sits in the step the floor has reached (Picking material, Prep, Coat, Pack) and moves down as each step is ticked off; finished units stay on the day, ticked. A day gone by with work still on it shows red. Click a colour tile to set or correct its colour. Every job in that colour follows.</p>
         <div class="schedule-nav">
           <button class="btn" id="pcs-prev">‹ Prev</button>
           <span id="pcs-range"></span>
@@ -133,6 +133,7 @@
           <button class="btn" id="pcs-today">Today</button>
           <span class="pc-behind" id="pcs-behind"></span>
         </div>
+        <div class="now-strip" id="pcs-now"></div>
         <div class="schedule-layout" id="pcs-layout">
           <div class="schedule-holding">
             <div class="schedule-holding-head">
@@ -212,6 +213,7 @@
           <span class="factory-reset-hint" id="factory-reset-hint"></span>
         </span>
       </div>
+      <div class="now-strip" id="factory-now"></div>
       <div class="stat-row" id="factory-stats"></div>
       <div class="factory-error" id="factory-error" hidden></div>
       <div class="filter-bar">
@@ -292,6 +294,7 @@ PRO-330659: L2.02, L2.02, L2.03, L2.03</pre>
         <h2>Door schedule</h2>
       </div>
       <div class="schedule-key" id="schedule-key"></div>
+      <div class="now-strip" id="schedule-now"></div>
       <p class="leveling-note">New work from an export waits in Holding, soonest due date first — drag it onto a day to schedule it. Days only show work someone has actually committed to. A job sits on one day and shows once: its doors start in Picking and move down to Machining, then Build/Wrap, as each stage is ticked off on the floor. Part of a job moves on while the rest stays. Finished doors stay on their day, ticked. A day that's gone by with work still on it shows that work in red until you drag it on. Drag anything back into Holding to set it aside.</p>
       <div class="schedule-nav">
         <button class="btn" id="schedule-prev">‹ Prev</button>
@@ -343,6 +346,7 @@ PRO-330659: L2.02, L2.02, L2.03, L2.03</pre>
         <button class="btn" id="cavities-next">Next ›</button>
         <button class="btn" id="cavities-today">Today</button>
       </div>
+      <div class="now-strip" id="cavities-now"></div>
       <div class="cav-error factory-error" id="cavities-error" hidden></div>
       <div class="schedule-layout">
         <div class="schedule-holding">

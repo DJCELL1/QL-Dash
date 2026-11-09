@@ -548,3 +548,23 @@ body.is-readonly .stage-controls { opacity: 0.5; pointer-events: none; }
 .signin-go:disabled { opacity: 0.6; }
 .signin-cancel { border: 1px solid var(--line); background: transparent; color: var(--ink-2); }
 .signin-img { width: 100%; border-radius: 10px; display: block; }
+
+/* ---------- Start / Stop ---------- */
+
+#lineToggle { margin-bottom: 0.4rem; }
+
+.work-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin-top: 0.6rem; }
+.work-btn {
+  min-height: 2.6rem;
+  padding: 0 1.1rem;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 700;
+}
+.work-btn.is-on { background: #2e7d32; border-color: #2e7d32; color: #fff; }
+.work-btn:disabled { opacity: 0.45; }
+.work-who { font-size: 0.85rem; font-weight: 600; color: #2e7d32; }
+.pill.working { background: #2e7d32; color: #fff; border-color: #2e7d32; }
