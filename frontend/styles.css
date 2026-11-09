@@ -2450,3 +2450,4 @@ body.is-gantt-open { overflow: hidden; }
 }
 .now-chip::before { content: "▶ "; color: var(--card-done-line); }
 .now-empty { color: var(--text-muted); }
+.now-customer { font-weight: 800; }

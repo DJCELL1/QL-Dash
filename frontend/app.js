@@ -6607,6 +6607,14 @@
     return `<span class="work-badge" title="${escapeAttr(stageLabel(stage))} started by ${escapeAttr(names)}">▶ ${escapeAttr(names)} · ${clockOf(on[0].started_at)}</span>`;
   }
 
+  // Who the job is for, whichever line it's on, so the floor can find it by name.
+  function customerForPro(pro) {
+    const row = state.factoryByPro.get(pro)
+      || state.cavities.rows.find((r) => r.prod_order_no === pro)
+      || (state.powdercoat.rows || []).find((r) => r.prod_order_no === pro);
+    return row && row.source_name ? customerLabel(row.source_name) : "";
+  }
+
   // The strip above a board: everything started on that line and not finished.
   function renderNowStrip(el, lineId) {
     if (!el) return;
@@ -6622,8 +6630,11 @@
     const order = FLOOR_ORDER();
     const chips = [...byJob.values()]
       .sort((a, b) => order.indexOf(a.stage) - order.indexOf(b.stage) || a.since.localeCompare(b.since))
-      .map((j) => `<span class="now-chip" title="Started ${clockOf(j.since)}">
-          <b>${escapeAttr(j.pro)}</b> ${escapeAttr(stageLabel(j.stage))} · ${escapeAttr(j.names.join(", "))} · ${clockOf(j.since)}</span>`)
+      .map((j) => {
+        const customer = customerForPro(j.pro);
+        return `<span class="now-chip" title="Started ${clockOf(j.since)}">
+          ${customer ? `<b class="now-customer">${escapeAttr(customer)}</b> · ` : ""}<b>${escapeAttr(j.pro)}</b> ${escapeAttr(stageLabel(j.stage))} · ${escapeAttr(j.names.join(", "))} · ${clockOf(j.since)}</span>`;
+      })
       .join("");
     el.innerHTML = `<span class="now-label">In production now</span>${chips || '<span class="now-empty">Nothing started</span>'}`;
   }
