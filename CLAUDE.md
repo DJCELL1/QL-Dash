@@ -114,6 +114,33 @@ Picking; Components, Build and Wrap became Build/Wrap (progress from
 `wrap_done`, bookings from Build's day, minutes and actual hours summed). Old
 ticks logged under Build and Components were left as they were.
 
+## The door board: one card per job
+
+A door job is booked onto a day by Picking alone (`SCHEDULABLE_STAGES` takes
+only the first door stage). `buildScheduleCells()` then lays its doors down
+that day by how far each has got: still to pick in Picking, picked in
+Machining, machined in Build/Wrap, and finished doors stay in Build/Wrap,
+ticked. Each door shows once. A job split across days fills its earliest day
+first, so the first doors booked count as the first ones done; dragging the
+doors still in Picking on to tomorrow leaves the picked ones where they were.
+
+A card is a piece of one booking at one stage. `applyCardMove()` moves the
+whole booking when the card is all of it and splits that many doors off onto
+the new day when it isn't. A card on a day that's gone by and isn't finished
+draws red (`is-card-behind`) and stays there until someone drags it.
+
+What a day has committed to, per PRO, is `cardsByCell.booked` (via
+`bookedOn()`): the doors, and how many of that day's doors are past each stage.
+Lane hours count every booked door at every stage, locked days record every
+booked door at every stage, and the day score credits that day's own doors.
+The Gantt and Efficiency treat a Picking booking as all three stages on that
+day.
+
+`_fold_door_bookings()` in `db.py` converted the old per-stage bookings once
+(flag `door_bookings_folded` in `app_settings`): a job with only a later stage
+booked kept that day as its Picking, and every other Machining or Build/Wrap
+booking was removed. The `stage_offsets` planning setting is no longer read.
+
 ## The three floor lines
 
 The Factory floor tab toggles between three lines, each with its own stages,
@@ -270,9 +297,9 @@ attribute. Both overlays carry an explicit `[hidden] { display: none; }`.
 
 ## Auto-scheduling
 
-Two endpoints, both placing only the **first** step of a line. The board
-derives every step after it from that anchor and the day offsets, so placing
-them here would fight it.
+Two endpoints, both placing only the **first** step of a line. On the door
+board that booking is the whole job's day; on the cavities board Make follows
+Prep.
 
 `POST /api/schedule/auto` takes a line, a date range and `replan`. Candidates
 are whatever still has quantity left to schedule, soonest due date first, each

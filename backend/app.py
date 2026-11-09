@@ -1285,7 +1285,9 @@ def api_factory_reset(request: Request, body: FactoryReset):
 
 # The board schedules doors and cavities alike. They're different datasets with
 # different PRO numbers, so a stage decides which one to look the order up in.
-SCHEDULABLE_STAGES = tuple(STAGES) + CAVITY_STAGES
+# A door job is booked onto a day by its first stage alone; the later stages
+# run on that same day, so they're never booked in their own right.
+SCHEDULABLE_STAGES = (STAGES[0],) + CAVITY_STAGES
 
 
 def _grouped_for_stage(stage: str) -> dict:
@@ -2551,9 +2553,17 @@ def api_efficiency(date_from: str, date_to: str):
         the_date = e["scheduled_date"]
         if the_date == HOLDING_DATE or not (date_from <= the_date <= date_to):
             continue
-        m = mins_for(e["prod_order_no"], e["stage"])
-        if m:
-            cell(the_date, e["stage"])["planned_hours"] += (e["qty"] or 0) * m / 60
+        # a door booking is every stage of those doors, on that day
+        if e["stage"] == STAGES[0]:
+            stages = STAGES
+        elif e["stage"] in STAGES:
+            continue
+        else:
+            stages = (e["stage"],)
+        for st in stages:
+            m = mins_for(e["prod_order_no"], st)
+            if m:
+                cell(the_date, st)["planned_hours"] += (e["qty"] or 0) * m / 60
 
     # earned — the estimated time of what was ticked that day
     for ev in get_progress_events(date_from, date_to):

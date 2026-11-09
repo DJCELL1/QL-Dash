@@ -356,6 +356,7 @@ def init_db() -> None:
     with get_conn() as conn:
         conn.executescript(SCHEMA)
         _add_missing_columns(conn)
+        _fold_door_bookings(conn)
 
 
 def _add_missing_columns(conn) -> None:
@@ -395,6 +396,33 @@ def _add_missing_columns(conn) -> None:
     # the one moment to carry the old stages' history across.
     if "picking_done" in added:
         _merge_door_stages(conn)
+
+
+def _fold_door_bookings(conn) -> None:
+    """Book each door job by its first stage alone, once.
+
+    The door board used to book Machining and Build/Wrap on days of their own.
+    It now books a job onto one day as Picking and moves its doors down the day
+    as they're done, so those later bookings mean nothing. A job that only had
+    a later stage booked keeps that day, as its Picking; everything else booked
+    under a later stage goes.
+    """
+    if conn.execute("SELECT 1 FROM app_settings WHERE key = 'door_bookings_folded'").fetchone():
+        return
+    later = ("machining", "build_wrap")
+    marks = ", ".join("?" for _ in later)
+    conn.execute(
+        f"UPDATE schedule_entries SET stage = 'picking' WHERE stage = ? AND prod_order_no NOT IN "
+        f"(SELECT prod_order_no FROM schedule_entries WHERE stage = 'picking')",
+        (later[0],),
+    )
+    conn.execute(
+        f"UPDATE schedule_entries SET stage = 'picking' WHERE stage = ? AND prod_order_no NOT IN "
+        f"(SELECT prod_order_no FROM schedule_entries WHERE stage = 'picking')",
+        (later[1],),
+    )
+    conn.execute(f"DELETE FROM schedule_entries WHERE stage IN ({marks})", later)
+    conn.execute("INSERT INTO app_settings (key, value) VALUES ('door_bookings_folded', '1')")
 
 
 def _merge_door_stages(conn) -> None:

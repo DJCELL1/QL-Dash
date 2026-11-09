@@ -55,10 +55,6 @@
       stage: localStorage.getItem("capacityStage") || null,
     },
     schedule: { entries: [], dayPlans: {}, priorities: {} },
-    scheduleOffsets: {
-      machining: Number(localStorage.getItem("scheduleOffsetMachining")) || 0,
-      build_wrap: Number(localStorage.getItem("scheduleOffsetBuild_wrap")) || 1,
-    },
     scheduleWindowStart: null,
   };
 
@@ -2722,7 +2718,7 @@
     const cardsByCell =
       line.id === "cavities" ? buildCavityCells(allRows)
       : line.id === "powdercoat" ? new Map()
-      : buildScheduleCells(allRows, computeMakeAnchors());
+      : buildScheduleCells(allRows);
 
     function cardsForDay(stage) {
       const out = [];
@@ -3040,62 +3036,25 @@
     return new Date(y, m - 1, d);
   }
 
-  function computeMakeAnchors() {
-    const doorsPerDay = state.capacity.doorsPerDay;
-    const leadTimeDays = state.capacity.leadTimeDays;
-    const rows = (state.data.factory && state.data.factory.rows) || [];
-    const today0 = nextOrSameBusinessDay(new Date());
 
-    const explicitMakeQty = new Map();
-    for (const e of state.schedule.entries) {
-      if (e.stage !== FACTORY_STAGES[0]) continue;
-      explicitMakeQty.set(e.prod_order_no, (explicitMakeQty.get(e.prod_order_no) || 0) + e.qty);
-    }
-
-    const lines = rows
-      .filter((r) => r.status !== "completed")
-      .map((r) => {
-        const already = explicitMakeQty.get(r.prod_order_no) || 0;
-        const remaining = Math.max(0, (r.total_qty || 0) - (r.picking_done || 0) - already);
-        const idealStart = r.due_date ? addBusinessDays(new Date(r.due_date), -leadTimeDays) : today0;
-        return { pro: r.prod_order_no, due: r.due_date, qty: remaining, idealStart };
-      })
-      .filter((l) => l.qty > 0.001)
-      .sort((a, b) => (a.due || "9999-99-99").localeCompare(b.due || "9999-99-99"));
-
-    const capacityUsed = new Map();
-    const canFit = (d, qty) => {
-      const k = dateKey(d);
-      const u = capacityUsed.get(k) || 0;
-      return u === 0 || u + qty <= doorsPerDay;
-    };
-    const book = (d, qty) => {
-      const k = dateKey(d);
-      capacityUsed.set(k, (capacityUsed.get(k) || 0) + qty);
-    };
-
-    const anchors = new Map();
-    for (const line of lines) {
-      const windowEnd = line.idealStart > today0 ? line.idealStart : today0;
-      let assigned = null;
-      forEachBusinessDay(today0, windowEnd, (d) => {
-        if (!assigned && canFit(d, line.qty)) assigned = d;
-      });
-      if (!assigned) {
-        let d = addBusinessDays(windowEnd, 1);
-        for (let i = 0; i < 250 && !assigned; i++) {
-          if (canFit(d, line.qty)) assigned = d;
-          else d = addBusinessDays(d, 1);
-        }
-      }
-      book(assigned, line.qty);
-      anchors.set(line.pro, { date: assigned, qty: line.qty });
-    }
-    return anchors;
-  }
-
-  function buildScheduleCells(factoryRows, anchors) {
+  // One PRO, one day. A job is booked onto a day as Picking bookings only, and
+  // its doors are then laid out down that day by how far each has got: still
+  // to pick, picked and waiting on Machining, machined and in Build/Wrap, or
+  // finished. Each door shows once, in the stage it's at, so ticking Picking
+  // complete moves those doors down to Machining on the same day.
+  //
+  // A job split across days fills its earliest day first: the first doors
+  // booked are taken to be the first ones done. So dragging the doors still in
+  // Picking on to tomorrow leaves the picked ones on today, where they were.
+  //
+  // The map is keyed "<day>|<stage>" as before. Alongside it, map.booked holds
+  // what each day has committed to, per PRO, whatever stage the doors are at:
+  // the doors, and how many have passed each stage. Day hours, locks and the
+  // locked-day score are measured on that, not on the stage the doors sit in.
+  function buildScheduleCells(factoryRows) {
     const map = new Map();
+    const booked = new Map();
+    map.booked = booked;
     const push = (dKey, stage, card) => {
       // A posted job is finished and gone from BC. It keeps its place on the
       // days it was planned and worked, because that's the record of those
@@ -3107,115 +3066,107 @@
       map.get(key).push(card);
     };
 
-    const explicitByProStage = new Map();
+    const first = FACTORY_STAGES[0];
+    const bookingsByPro = new Map();
     for (const e of state.schedule.entries) {
-      const key = `${e.prod_order_no}|${e.stage}`;
-      if (!explicitByProStage.has(key)) explicitByProStage.set(key, []);
-      explicitByProStage.get(key).push(e);
+      if (e.stage !== first) continue;
+      if (!bookingsByPro.has(e.prod_order_no)) bookingsByPro.set(e.prod_order_no, []);
+      bookingsByPro.get(e.prod_order_no).push(e);
     }
 
+    // [a, b) against [lo, hi): how many doors of a chunk fall in a stage
+    const overlap = (a, b, lo, hi) => Math.max(0, Math.min(b, hi) - Math.max(a, lo));
+
     for (const row of factoryRows) {
-      // Finished jobs stay on the board as the record of what was done —
-      // ticking Finish shouldn't wipe the day clean, and nothing below removes
-      // a card for being complete.
       const pro = row.prod_order_no;
+      const total = row.total_qty || 0;
+      if (total <= 0) continue;
+      const stages = stagesOfRow(row);
 
-      // Each stage follows the one before it, not Make directly. Pull a Press
-      // back to Holding and CNC has nothing to follow, so it comes back too —
-      // you can't CNC a door that hasn't been pressed.
-      let prevDateKey = null;
+      // How many doors have got past each stage. A later stage can't be ahead
+      // of an earlier one (the server refuses that), but clamp anyway so one
+      // odd row can't draw negative cards.
+      const passed = [];
+      let cap = total;
+      for (const st of stages) {
+        cap = Math.min(cap, Math.max(0, row[`${st}_done`] || 0));
+        passed.push(cap);
+      }
 
-      for (const stage of stagesOfRow(row)) {
-        const total = row.total_qty || 0;
-        const done = row[`${stage}_done`] || 0;
-        // Completed stages stay on the board, filled fully green, so the day still
-        // shows what was actually worked rather than emptying out as it's finished.
-        const stageComplete = total > 0 && done >= total;
+      // Days first, earliest first, then Holding, then whatever nobody booked.
+      const entries = (bookingsByPro.get(pro) || []).slice().sort((x, y) => {
+        const hx = x.scheduled_date === HOLDING_DATE;
+        const hy = y.scheduled_date === HOLDING_DATE;
+        if (hx !== hy) return hx ? 1 : -1;
+        return x.scheduled_date.localeCompare(y.scheduled_date) || x.id - y.id;
+      });
+      const chunks = entries.map((e) => ({ dKey: e.scheduled_date, qty: e.qty, entry: e }));
+      const bookedQty = entries.reduce((s, e) => s + e.qty, 0);
+      if (total - bookedQty > 0.001) chunks.push({ dKey: HOLDING_DATE, qty: total - bookedQty, entry: null });
 
-        const explicit = explicitByProStage.get(`${pro}|${stage}`) || [];
-        const explicitSum = explicit.reduce((s, e) => s + e.qty, 0);
-        const leftover = Math.max(0, total - done - explicitSum);
+      const base = {
+        pro,
+        so: row.sales_order_no,
+        customer: boardCustomerLabel(row),
+        wm: row.wm_number || null,
+        posted: !!row.posted,
+        item: row.item_summary,
+        due: row.due_date,
+        bookStage: first,
+        // How many pieces this PRO is booked in. Only a job that's actually
+        // been split has anything to join back.
+        chunks: entries.length,
+      };
 
-        // A card dragged onto a day wins; a card dragged into Holding is a
-        // deliberate "not yet" and must not be re-dated by the chain.
-        const explicitDated = explicit.filter((e) => e.scheduled_date !== HOLDING_DATE);
-        const explicitHeld = explicit.length > 0 && explicitDated.length === 0;
-        const earliestDated = explicitDated.length
-          ? explicitDated.reduce((min, e) => (e.scheduled_date < min ? e.scheduled_date : min), explicitDated[0].scheduled_date)
-          : null;
+      let at = 0;
+      for (const chunk of chunks) {
+        const a = at;
+        const b = Math.min(total, at + chunk.qty);
+        at = b;
+        if (b - a <= 0.001) continue;
 
-        for (const e of explicit) {
-          push(e.scheduled_date, stage, {
-            pro,
-            so: row.sales_order_no,
-            stage,
-            qty: e.qty,
-            entryId: e.id,
-            confirmed: true,
-            stageComplete,
-            // How many pieces this PRO's stage is currently in. Only a job
-            // that's actually been split has anything to join back.
-            chunks: explicit.length,
-            customer: boardCustomerLabel(row),
-            wm: row.wm_number || null,
-            posted: !!row.posted,
-            item: row.item_summary,
-            due: row.due_date,
+        // Doors in this chunk at each stage: stage i holds the doors past
+        // stage i-1 but not past stage i. The last stage also keeps the
+        // finished doors, ticked, so the day still shows what it got done.
+        const cardBase = Object.assign({}, base, {
+          dKey: chunk.dKey,
+          entryId: chunk.entry ? chunk.entry.id : null,
+          confirmed: !!chunk.entry,
+          chunkQty: chunk.qty,
+        });
+        stages.forEach((st, i) => {
+          const lo = passed[i];
+          const hi = i === 0 ? total : passed[i - 1];
+          const waiting = overlap(a, b, lo, hi);
+          const finished = i === stages.length - 1 ? overlap(a, b, 0, passed[i]) : 0;
+          const qty = waiting + finished;
+          if (qty <= 0.001) return;
+          push(chunk.dKey, st, Object.assign({}, cardBase, {
+            stage: st,
+            qty,
+            pieceDone: finished,
+            stageComplete: finished >= qty - 0.001,
+          }));
+        });
+
+        if (chunk.dKey !== HOLDING_DATE) {
+          if (!booked.has(chunk.dKey)) booked.set(chunk.dKey, new Map());
+          const day = booked.get(chunk.dKey);
+          const rec = day.get(pro) || { qty: 0, done: {} };
+          rec.qty += b - a;
+          stages.forEach((st, i) => {
+            rec.done[st] = (rec.done[st] || 0) + overlap(a, b, 0, passed[i]);
           });
-        }
-
-        let stageDateKey;
-        if (explicitDated.length > 0) {
-          // Dragged onto a day: that date wins and the rest of the chain hangs
-          // off it, so a dated Press still carries CNC even if Make is held.
-          stageDateKey = earliestDated;
-        } else if (explicitHeld) {
-          // Dragged into Holding: a deliberate "not yet", so it waits — and
-          // everything downstream waits with it.
-          stageDateKey = HOLDING_DATE;
-        } else if (stage === FACTORY_STAGES[0]) {
-          // Work nobody has scheduled yet waits in Holding rather than being
-          // scattered across days on a guess — you decide what runs when, and
-          // the days only ever show work someone actually committed to.
-          stageDateKey = HOLDING_DATE;
-        } else if (prevDateKey && prevDateKey !== HOLDING_DATE) {
-          stageDateKey = dateKey(addBusinessDays(parseDateKey(prevDateKey), state.scheduleOffsets[stage] || 0));
-        } else {
-          stageDateKey = HOLDING_DATE; // nothing dated ahead of it to follow
-        }
-        prevDateKey = stageDateKey;
-
-        // Work still to do, on the day it's expected.
-        // Finished work that was never dragged onto a day belongs on the board
-        // too. A booking always draws its card whether or not it's done, but a
-        // suggested card's quantity is what's left — so finishing the stage took
-        // it to zero and wiped the job off the day. On the board it was real
-        // work on that day, and the schedule is the record of what got done.
-        const uncommitted = Math.max(0, total - explicitSum);
-        const suggestedQty = leftover > 0.001 ? leftover : stageComplete ? uncommitted : 0;
-
-        // Finished work stays wherever it sits, Holding included. A job worked
-        // without ever being dragged onto a day has no day to show it on, and
-        // hiding it would mean the board silently forgot work that was done.
-        if (suggestedQty > 0.001) {
-          push(stageDateKey, stage, {
-            pro,
-            so: row.sales_order_no,
-            stage,
-            qty: suggestedQty,
-            entryId: null,
-            confirmed: false,
-            stageComplete,
-            customer: boardCustomerLabel(row),
-            wm: row.wm_number || null,
-            posted: !!row.posted,
-            item: row.item_summary,
-            due: row.due_date,
-          });
+          day.set(pro, rec);
         }
       }
     }
     return map;
+  }
+
+  // What a day has booked, per PRO: { qty, done: { stage: doors past it } }.
+  function bookedOn(cardsByCell, dKey) {
+    return (cardsByCell.booked && cardsByCell.booked.get(dKey)) || new Map();
   }
 
   // The badge on a schedule card. Derived from the stage order rather than
@@ -3223,15 +3174,6 @@
   // positions beat initials here, since a label like Build/Wrap has no one letter.
   const STAGE_TAG_LETTER = Object.fromEntries(FACTORY_STAGES.map((s, i) => [s, String(i + 1)]));
 
-  // How far through this stage the job is, straight from Factory floor entries.
-  // 2 of 4 doors made => 0.5 on that PRO's Make card.
-  function stageProgress(pro, stage) {
-    const f = state.factoryByPro.get(pro);
-    if (!f) return { done: 0, total: 0, pct: 0 };
-    const total = f.total_qty || 0;
-    const done = Math.min(f[`${stage}_done`] || 0, total);
-    return { done, total, pct: total > 0 ? done / total : 0 };
-  }
 
   function progressFillStyle(pct) {
     if (pct <= 0) return "";
@@ -3240,8 +3182,20 @@
     return ` style="background-image: linear-gradient(to right, var(--progress-fill) 0 ${stop}%, transparent ${stop}% 100%)"`;
   }
 
+  // A card is a piece of a job: the doors of it sitting at one stage on one
+  // day. Only the last stage has anything done inside it — the finished doors
+  // it keeps — so that's what fills the card.
+  function pieceProgress(card) {
+    const total = card.qty || 0;
+    const done = Math.min(card.pieceDone || 0, total);
+    return { done, total, pct: total > 0 ? done / total : 0 };
+  }
+
+  // Doors at this stage, said the way the floor would.
+  const PIECE_VERBS = { picking: "to pick", machining: "to machine", build_wrap: "to build & wrap" };
+
   function scheduleCardHTML(card, cardKey) {
-    const p = stageProgress(card.pro, card.stage);
+    const p = pieceProgress(card);
     const done = p.pct >= 1 && p.total > 0;
     const picked = state.selectedCards.has(cardKey);
     // A finished step wins over everything else — it's done, whatever else is
@@ -3252,8 +3206,11 @@
     // so compare the ISO prefixes instead — they sort correctly as text.
     const overdue = !done && card.due && String(card.due).slice(0, 10) < dateKey(new Date());
     const shortage = !done && row && row.shortage;
+    // Its day has gone by and it isn't finished: it stays put, in red, until
+    // someone drags it on.
+    const behind = !done && !card.posted && card.dKey && card.dKey !== HOLDING_DATE && card.dKey < dateKey(new Date());
     const stateCls = done ? "is-stage-done" : shortage ? "is-card-shortage" : overdue ? "is-card-overdue" : "";
-    const cls = `schedule-card ${card.confirmed ? "" : "is-suggested"} ${stateCls} ${picked ? "is-selected" : ""}`;
+    const cls = `schedule-card ${card.confirmed ? "" : "is-suggested"} ${stateCls} ${behind ? "is-card-behind" : ""} ${picked ? "is-selected" : ""}`;
     const dueText = card.due ? fmtDate(card.due) : "";
     // Join only shows on a job that's in more than one piece — on an unsplit
     // card it would do nothing, and three buttons on a card this size is a lot.
@@ -3268,11 +3225,12 @@
         </span>`
       : "";
     const progressText = done
-      ? ` · <span class="sc-done">✓ ${stageLabel(card.stage).toLowerCase()} done</span>`
-      : p.total > 0
-        ? ` · ${fmtNum(p.done)}/${fmtNum(p.total)} ${stageLabel(card.stage).toLowerCase()}`
-        : "";
-    return `<div class="${cls}"${progressFillStyle(p.pct)} draggable="true" data-card-key="${escapeAttr(cardKey)}" data-pro="${card.pro}" data-stage="${card.stage}" data-qty="${card.qty}" data-entry-id="${card.entryId ?? ""}" data-confirmed="${card.confirmed}" data-progress="${Math.round(p.pct * 100)}" title="${stageLabel(card.stage)} — ${fmtNum(p.done)} of ${fmtNum(p.total)} done — ${card.item || ""}">
+      ? ` · <span class="sc-done">✓ finished</span>`
+      : p.done > 0
+        ? ` · ${fmtNum(p.done)}/${fmtNum(p.total)} finished`
+        : ` · ${PIECE_VERBS[card.stage] || stageLabel(card.stage).toLowerCase()}`;
+    const behindText = behind ? `<span class="sc-behind">Behind — ${fmtDayDate(parseDateKey(card.dKey))}</span>` : "";
+    return `<div class="${cls}"${progressFillStyle(p.pct)} draggable="true" data-card-key="${escapeAttr(cardKey)}" data-pro="${card.pro}" data-stage="${card.stage}" data-book-stage="${card.bookStage || card.stage}" data-day="${card.dKey || ""}" data-qty="${card.qty}" data-chunk-qty="${card.chunkQty ?? card.qty}" data-entry-id="${card.entryId ?? ""}" data-confirmed="${card.confirmed}" data-progress="${Math.round(p.pct * 100)}" title="${stageLabel(card.stage)} — ${fmtNum(card.qty)} door${card.qty === 1 ? "" : "s"} here${p.done ? `, ${fmtNum(p.done)} finished` : ""} — ${card.item || ""}">
       ${actions}
       <input type="checkbox" class="schedule-card-pick" data-card-key="${escapeAttr(cardKey)}" ${picked ? "checked" : ""} title="Select this PRO to move with others">
       <span class="stage-dot" title="${stageLabel(card.stage)}">${STAGE_TAG_LETTER[card.stage] || ""}</span>
@@ -3280,6 +3238,7 @@
       <span class="sc-so">${card.so || ""}</span>
       <span class="sc-meta">${fmtNum(card.qty)}× ${card.customer || ""}</span>
       <span class="sc-meta">Due ${dueText || "—"}${progressText}</span>
+      ${behindText}
     </div>`;
   }
 
@@ -3322,7 +3281,10 @@
     const payload = groupCards.map((c) => ({
       pro: c.pro,
       stage: c.stage,
+      bookStage: c.bookStage,
+      day: c.dKey,
       qty: c.qty,
+      chunkQty: c.chunkQty,
       entryId: c.entryId,
       confirmed: c.confirmed,
     }));
@@ -3333,7 +3295,7 @@
     let gDone = 0;
     let gTotal = 0;
     for (const c of groupCards) {
-      const p = stageProgress(c.pro, c.stage);
+      const p = pieceProgress(c);
       gDone += p.done;
       gTotal += p.total;
     }
@@ -3373,14 +3335,8 @@
     const lines = plan.lines.filter((l) => wanted.has(l.stage));
     if (lines.length === 0) return { planned: 0, done: 0, moved: 0, pct: null, movedPros: [] };
 
-    // what's on the day right now, per PRO and stage
-    const onDay = new Map();
-    for (const stage of stages) {
-      for (const c of cardsByCell.get(`${dKey}|${stage}`) || []) {
-        const key = `${c.pro}|${stage}`;
-        onDay.set(key, (onDay.get(key) || 0) + (c.qty || 0));
-      }
-    }
+    // what the day still has booked, per PRO, whatever stage it's reached
+    const onDay = bookedOn(cardsByCell, dKey);
 
     let planned = 0;
     let done = 0;
@@ -3389,16 +3345,16 @@
 
     for (const line of lines) {
       planned += line.qty;
-      const key = `${line.prod_order_no}|${line.stage}`;
-      if (!onDay.has(key)) {
+      const rec = onDay.get(line.prod_order_no);
+      if (!rec) {
         moved += line.qty;
         movedPros.push(line.prod_order_no);
         continue;
       }
-      // Credit is capped at what was promised: a job split across two days
-      // can't finish this one on the strength of the other day's doors.
-      const p = stageProgress(line.prod_order_no, line.stage);
-      done += Math.min(p.done, line.qty);
+      // Credit is this day's own doors past that stage, capped at what was
+      // promised, so a job split across two days can't finish this one on the
+      // strength of the other day's doors.
+      done += Math.min(rec.done[line.stage] || 0, line.qty);
     }
 
     return {
@@ -3437,13 +3393,9 @@
     return out;
   }
 
+  // Each door is on the board once, in the stage it's at, so the cards add up.
   function dedupedDoorTotal(cards) {
-    // a door counts once even if it appears in both Make and Press that day
-    const perPro = new Map();
-    for (const c of cards) {
-      perPro.set(c.pro, Math.max(perPro.get(c.pro) || 0, c.qty));
-    }
-    return Array.from(perPro.values()).reduce((s, q) => s + q, 0);
+    return cards.reduce((s, c) => s + (c.qty || 0), 0);
   }
 
   // A card is one PRO's chunk of one stage in one cell, so its identity has to
@@ -3646,20 +3598,12 @@
     $$("#view-scheduling .lock-btn[data-lock-date]").forEach((btn) => {
       btn.addEventListener("click", async () => {
         const dKey = btn.dataset.lockDate;
-        // One line per PRO and stage, at the quantity showing on the board —
-        // this is exactly what the meeting just agreed to.
-        const perLine = new Map();
-        for (const stage of stages) {
-          for (const c of cardsByCell.get(`${dKey}|${stage}`) || []) {
-            const key = `${c.pro}|${stage}`;
-            perLine.set(key, {
-              stage,
-              prod_order_no: c.pro,
-              qty: (perLine.get(key)?.qty || 0) + (c.qty || 0),
-            });
-          }
+        // Every door booked on the day, at every stage: the day is promising
+        // to take each one all the way through, and is scored on that.
+        const lines = [];
+        for (const [pro, rec] of bookedOn(cardsByCell, dKey)) {
+          for (const stage of stages) lines.push({ stage, prod_order_no: pro, qty: rec.qty });
         }
-        const lines = [...perLine.values()];
         if (lines.length === 0 && !confirm(`Nothing is scheduled on ${dKey}. Lock it in as an empty day?`)) return;
 
         try {
@@ -3693,21 +3637,6 @@
         else state.expanded.add(key);
         renderScheduling();
       });
-    });
-  }
-
-  function wireScheduleOffsetInputs() {
-    const map = { machining: "#offset-machining", build_wrap: "#offset-build_wrap" };
-    Object.entries(map).forEach(([key, sel]) => {
-      const input = $(sel);
-      input.value = state.scheduleOffsets[key];
-      input.onchange = () => {
-        const v = Math.max(0, Math.round(Number(input.value) || 0));
-        state.scheduleOffsets[key] = v;
-        input.value = v;
-        localStorage.setItem(`scheduleOffset${capitalize(key)}`, String(v));
-        renderScheduling();
-      };
     });
   }
 
@@ -3747,12 +3676,26 @@
     );
   }
 
-  async function applyCardMove(cardData, targetDate) {
-    if (cardData.confirmed) {
+  // A card is the doors of one booking that sit at one stage, so moving it
+  // moves that many doors of the booking: all of it moves the booking, part of
+  // it splits that part off onto the new day. `taken` counts what earlier
+  // cards in the same drag already took off each booking, so two pieces of one
+  // booking dragged together don't each try to split the whole of it.
+  async function applyCardMove(cardData, targetDate, taken) {
+    if (cardData.day && cardData.day === targetDate) return; // same day, nothing to move
+    const stage = cardData.bookStage || cardData.stage;
+    if (!cardData.confirmed || !cardData.entryId) {
+      await postJSON("/api/schedule", { prod_order_no: cardData.pro, stage, date: targetDate, qty: cardData.qty });
+      return;
+    }
+    const used = (taken && taken.get(cardData.entryId)) || 0;
+    const left = (cardData.chunkQty ?? cardData.qty) - used;
+    if (cardData.qty >= left - 0.001) {
       await postJSON(`/api/schedule/${cardData.entryId}/move`, { date: targetDate });
     } else {
-      await postJSON("/api/schedule", { prod_order_no: cardData.pro, stage: cardData.stage, date: targetDate, qty: cardData.qty });
+      await postJSON(`/api/schedule/${cardData.entryId}/split`, { qty: cardData.qty, date: targetDate });
     }
+    if (taken) taken.set(cardData.entryId, used + cardData.qty);
   }
 
   function groupCardsOf(head) {
@@ -3863,6 +3806,20 @@
     return true;
   }
 
+  function cardDataOf(card, type) {
+    const data = {
+      pro: card.dataset.pro,
+      stage: card.dataset.stage,
+      bookStage: card.dataset.bookStage || card.dataset.stage,
+      day: card.dataset.day || null,
+      qty: Number(card.dataset.qty),
+      chunkQty: Number(card.dataset.chunkQty || card.dataset.qty),
+      entryId: card.dataset.entryId || null,
+      confirmed: card.dataset.confirmed === "true",
+    };
+    return type ? Object.assign({ type }, data) : data;
+  }
+
   function wireScheduleDragDrop() {
     $$(".schedule-card[draggable='true']").forEach((card) => {
       card.addEventListener("dragstart", (e) => {
@@ -3871,14 +3828,7 @@
         // that most drags take.
         const data = state.selectedCards.has(card.dataset.cardKey)
           ? selectedDragPayload()
-          : {
-              type: "card",
-              pro: card.dataset.pro,
-              stage: card.dataset.stage,
-              qty: Number(card.dataset.qty),
-              entryId: card.dataset.entryId || null,
-              confirmed: card.dataset.confirmed === "true",
-            };
+          : cardDataOf(card, "card");
         e.dataTransfer.setData("text/plain", JSON.stringify(data));
         e.dataTransfer.effectAllowed = "move";
       });
@@ -3909,13 +3859,7 @@
         const card = box.closest(".schedule-card");
         const key = box.dataset.cardKey;
         if (box.checked) {
-          state.selectedCards.set(key, {
-            pro: card.dataset.pro,
-            stage: card.dataset.stage,
-            qty: Number(card.dataset.qty),
-            entryId: card.dataset.entryId || null,
-            confirmed: card.dataset.confirmed === "true",
-          });
+          state.selectedCards.set(key, cardDataOf(card));
         } else {
           state.selectedCards.delete(key);
         }
@@ -3979,9 +3923,10 @@
             // same PRO+stage can each read "0 already scheduled" before the other's
             // write lands, letting both succeed and double-book the job
             const failures = [];
+            const taken = new Map();
             for (const c of cards) {
               try {
-                await applyCardMove(c, targetDate);
+                await applyCardMove(c, targetDate, taken);
               } catch (err) {
                 failures.push(err);
               }
@@ -4025,13 +3970,15 @@
         const action = btn.dataset.action;
         try {
           if (action === "remove") {
-            await apiDelete(`/api/schedule/${entryId}`);
+            // Only the doors on this card go back to Holding; the rest of the
+            // booking keeps its day.
+            await applyCardMove(cardDataOf(card), HOLDING_DATE);
           } else if (action === "join") {
             const chunks = Number(btn.dataset.chunks);
             const zone = card.closest(".schedule-dropzone");
             const dKey = zone && zone.dataset.date;
             const where = dKey === HOLDING_DATE ? "Holding" : dKey ? fmtDayDate(parseDateKey(dKey)) : "this chunk's day";
-            if (!confirm(`Join all ${chunks} pieces of ${card.dataset.pro} ${stageLabel(card.dataset.stage)} into one on ${where}?`)) return;
+            if (!confirm(`Join all ${chunks} pieces of ${card.dataset.pro} into one on ${where}?`)) return;
             await postJSON(`/api/schedule/${entryId}/join`, {});
           } else if (action === "split") {
             const total = Number(card.dataset.qty);
@@ -4059,7 +4006,7 @@
     // Make — so reading the entries table alone dropped every CNC job off the
     // run sheet while the screen still showed it sitting on that day.
     const factoryRows = (state.data.factory && state.data.factory.rows) || [];
-    const cardsByCell = buildScheduleCells(factoryRows, computeMakeAnchors());
+    const cardsByCell = buildScheduleCells(factoryRows);
 
     const byStage = printStages.map((stage) => {
       // Finished work stays on the sheet — it's the record of the day, not just
@@ -4271,11 +4218,8 @@
     }
     emptyEl.hidden = true;
 
-    wireScheduleOffsetInputs();
-
     const factoryRows = state.data.factory.rows || [];
-    const anchors = computeMakeAnchors();
-    const cardsByCell = buildScheduleCells(factoryRows, anchors);
+    const cardsByCell = buildScheduleCells(factoryRows);
 
     liveCardKeys = new Set();
     renderHoldingBox(cardsByCell);
@@ -4296,7 +4240,8 @@
     const keyEl = $("#schedule-key");
     if (keyEl) {
       keyEl.innerHTML =
-        '<span class="key-swatch key-done">Step complete</span>' +
+        '<span class="key-swatch key-done">Finished</span>' +
+        '<span class="key-swatch key-behind">Day gone by, not finished</span>' +
         '<span class="key-swatch key-overdue">Past due date</span>' +
         '<span class="key-swatch key-shortage">Material shortage</span>' +
         '<span class="key-swatch key-closed">Closed day</span>';
@@ -4318,7 +4263,7 @@
           if (planning().capacity_measure === "hours") {
             // Every lane is measured, not just the one the board plans against:
             // a step with more work than hours is a step that won't get done.
-            const { hours, unpriced } = estimatedHours(cards);
+            const { hours, unpriced } = bookedHours(cardsByCell, dKey, section.stages);
             const avail = hoursAvailable(dKey, section.stages);
             labelText = `${section.label} — ${hours.toFixed(1)}/${fmtNum(avail)}h`;
             if (unpriced) labelText += `<span class="lane-unpriced" title="${unpriced} job(s) have no minutes-per-unit set, so they aren't counted">+${unpriced}?</span>`;
@@ -4327,7 +4272,7 @@
             if (hours > avail) comboCls = "is-over-capacity";
             else if (avail > 0 && hours >= avail * 0.95) comboCls = "is-at-capacity";
           } else if (section.capacityCheck) {
-            const total = dedupedDoorTotal(cards);
+            const total = [...bookedOn(cardsByCell, dKey).values()].reduce((s, r) => s + r.qty, 0);
             labelText = `${section.label} — ${fmtNum(total)}/${fmtNum(threshold)}`;
             if (total > threshold) comboCls = "is-over-capacity";
             else if (total >= threshold) comboCls = "is-at-capacity";
@@ -4335,7 +4280,7 @@
 
           return `<div class="schedule-stage-section ${comboCls}">
             <div class="schedule-stage-label">${labelText}${scoreHTML(dayScore(dKey, cardsByCell, section.stages))}</div>
-            <div class="schedule-dropzone" data-date="${dKey}" data-section="${section.id}" data-stages="${section.stages.join(",")}">${cardsHtml}</div>
+            <div class="schedule-dropzone" data-date="${dKey}" data-section="${section.id}" data-stages="${FACTORY_STAGES.join(",")}">${cardsHtml}</div>
           </div>`;
         }).join("");
 
@@ -4423,16 +4368,18 @@
     return typeof mins === "number" ? mins : null;
   }
 
-  // Estimated hours for a lane's cards. A job with no figure anywhere — no
-  // product row, no default and no BC estimate — contributes nothing and is
-  // counted so the lane can say the total is short.
-  function estimatedHours(cards) {
+
+  // A day's load at a step is every door booked on it, whatever stage each has
+  // reached: booking a job onto a day books all three stages of it there.
+  function bookedHours(cardsByCell, dKey, stages) {
     let hours = 0;
     let unpriced = 0;
-    for (const c of cards) {
-      const mins = minutesPerUnit(c.pro, c.stage);
-      if (mins == null) { unpriced += 1; continue; }
-      hours += (c.qty || 0) * mins / 60;
+    for (const [pro, rec] of bookedOn(cardsByCell, dKey)) {
+      for (const st of stages) {
+        const mins = minutesPerUnit(pro, st);
+        if (mins == null) { unpriced += 1; continue; }
+        hours += rec.qty * mins / 60;
+      }
     }
     return { hours, unpriced };
   }
@@ -4744,6 +4691,8 @@
     const idx = stages.indexOf(stage);
     if (idx <= 0) return null;
     const prev = stages[idx - 1];
+    // Door stages share their day by design, so there's nothing to flag.
+    if (FACTORY_STAGES.includes(stage)) return { prev };
     const entries = state.schedule.entries.filter((e) => e.prod_order_no === pro && e.stage === prev);
     if (!entries.length) return { icon: "⚠", why: `${stageLabel(prev)} isn't scheduled at all`, prev };
     const earliest = entries.map((e) => e.scheduled_date).sort()[0];
@@ -4759,8 +4708,10 @@
 
   // Blocks for one area: sales orders end to end, in board order.
   function ganttRow(stage, dKey) {
+    // A door job is booked as Picking and runs every stage on that day.
+    const booking = FACTORY_STAGES.includes(stage) ? FACTORY_STAGES[0] : stage;
     const entries = state.schedule.entries
-      .filter((e) => e.stage === stage && e.scheduled_date === dKey)
+      .filter((e) => e.stage === booking && e.scheduled_date === dKey)
       .sort((a, b) => (a.sequence - b.sequence) || String(a.sales_order_no).localeCompare(String(b.sales_order_no)));
 
     const bySo = new Map();
@@ -5345,9 +5296,6 @@
     const rates = Object.entries(lines).map(([id, ln]) =>
       `<label class="capacity-label">${escapeAttr(ln.label)} / day
         <input type="number" class="num-input" min="0" step="1" data-rate="${id}" value="${(pl.daily_rates || {})[id] ?? 0}"></label>`).join("");
-    const offsets = Object.entries(pl.stage_offsets || {}).map(([stage, v]) =>
-      `<label class="capacity-label">${escapeAttr(stageLabel(stage))} +d
-        <input type="number" class="num-input" min="0" step="1" data-offset="${stage}" value="${v}"></label>`).join("");
 
     $("#settings-planning").innerHTML = `
       <label class="capacity-label">Shift start
@@ -5359,8 +5307,7 @@
       <label class="capacity-label">Capacity measured in
         <select data-plan="capacity_measure">${[["hours", "Hours"], ["count", "Count"], ["sqm", "m²"], ["linear", "Linear metres"]]
           .map(([v, t]) => `<option value="${v}" ${pl.capacity_measure === v ? "selected" : ""}>${t}</option>`).join("")}</select></label>
-      ${rates}
-      ${offsets}`;
+      ${rates}`;
 
     const save = async (values) => {
       await saveSettings("/api/settings/planning", { values });
@@ -5375,9 +5322,6 @@
     });
     $$("#settings-planning [data-rate]").forEach((el) => {
       el.onchange = () => save({ daily_rates: { ...(pl.daily_rates || {}), [el.dataset.rate]: Number(el.value) || 0 } });
-    });
-    $$("#settings-planning [data-offset]").forEach((el) => {
-      el.onchange = () => save({ stage_offsets: { ...(pl.stage_offsets || {}), [el.dataset.offset]: Number(el.value) || 0 } });
     });
   }
 

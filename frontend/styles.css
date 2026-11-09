@@ -2372,3 +2372,19 @@ body.is-gantt-open { overflow: hidden; }
   -webkit-print-color-adjust: exact;
   print-color-adjust: exact;
 }
+
+/* A day gone by with this still on it. Red down the edge rather than a fill,
+   so it reads alongside overdue and shortage instead of replacing them. */
+.schedule-card.is-card-behind {
+  border-color: var(--status-critical);
+  box-shadow: inset 4px 0 0 0 var(--status-critical);
+}
+.sc-behind {
+  display: block;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--status-critical);
+}
+.key-behind::before { border-color: var(--status-critical); box-shadow: inset 4px 0 0 0 var(--status-critical); }
