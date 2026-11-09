@@ -1935,26 +1935,35 @@
         : `Due ${fmtDate(j.due_date)}`
       : "No due date";
     const eta = j.eta_date ? ` · ETA ${fmtDate(j.eta_date)}` : "";
-    return `<div class="sub-card pc-card${done ? " is-pc-done" : ""}${behind ? " is-card-behind" : ""}" draggable="true" data-pro="${j.prod_order_no}" data-wc="${j.work_centre_no}">
+    // The card is the colour it's being coated, so a batch reads at a glance;
+    // the text flips light or dark to stay readable on it.
+    const hex = j.colour && j.colour.hex;
+    const paint = hex ? ` style="background:${hex};color:${inkOn(hex)}"` : "";
+    return `<div class="sub-card pc-card${hex ? " is-coloured" : ""}${done ? " is-pc-done" : ""}${behind ? " is-card-behind" : ""}"${paint} draggable="true" data-pro="${j.prod_order_no}" data-wc="${j.work_centre_no}">
+      <div class="pc-card-client">${customerLabel(j.source_name)}</div>
+      <div class="pc-card-so">${soLabel(j.sales_order_no)}</div>
       <div class="sub-card-top">
         <span class="sub-card-pro">${j.prod_order_no}</span>
-        <span class="sub-card-so">${soLabel(j.sales_order_no)}</span>
         <span class="sub-card-qty">${fmtNum(j.remaining_qty || j.qty)} ${j.uom || "EA"}</span>
       </div>
       <div class="pc-card-colour">
-        ${pcsSwatchHTML(j, "lg")}
-        <div class="pc-card-colour-text">
-          <div class="pc-card-colour-name">${escapeAttr(pcsColourName(j))}</div>
-          <div class="sub-card-muted">${escapeAttr(pcsColourDetail(j))}</div>
-        </div>
+        ${pcsSwatchHTML(j, "sm")}
+        <span class="pc-card-colour-name">${escapeAttr(pcsColourName(j))}</span>
+        <span class="sub-card-muted">${escapeAttr(pcsColourDetail(j))}</span>
       </div>
-      <div class="sub-card-line">${customerLabel(j.source_name)}</div>
       <div class="sub-card-muted">${j.item_description || ""}</div>
       <div class="sub-card-muted">${due}${eta}${done ? ' · <span class="sc-done">✓ finished</span>' : j.pieceDone ? ` · ${fmtNum(j.pieceDone)} finished` : ""}</div>
       ${showStatus ? `<span class="pc-status pc-status-${stage}">At ${escapeAttr(stageLabel(stage))}</span>` : ""}
       ${behind ? `<span class="sc-behind">Behind — ${fmtDayDate(parseDateKey(j.scheduled_date.slice(0, 10)))}</span>` : ""}
       ${workBadgeHTML(j.prod_order_no, stage)}
     </div>`;
+  }
+
+  // Dark text on a light colour, white on a dark one, by perceived lightness.
+  function inkOn(hex) {
+    const n = parseInt(hex.slice(1), 16);
+    const r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+    return (0.299 * r + 0.587 * g + 0.114 * b) > 150 ? "#1e1e1e" : "#ffffff";
   }
 
   const pcsByDue = (a, b) =>

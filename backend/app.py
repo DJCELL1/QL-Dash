@@ -1823,6 +1823,43 @@ def api_work_start(request: Request, body: WorkIn):
     return row
 
 
+class WorkAdvance(BaseModel):
+    prod_order_no: str
+    stage: str
+    finish: bool = False
+
+
+@app.post("/api/work/advance")
+def api_work_advance(request: Request, body: WorkAdvance):
+    """The phone's one button. Starting a step means every step before it is
+    finished, so those are completed in shop order and their sessions end; then
+    this step is started. With `finish`, this step is completed too: that's
+    the last step's Finish, which has no next step to start."""
+    line_id = _stage_line(body.stage)
+    if not line_id:
+        raise HTTPException(status_code=400, detail=f"stage must be one of {', '.join(ALL_STAGES)}")
+    line = LINES[line_id]
+    _, grouped = _pro_totals(line["dataset"])
+    g = grouped.get(body.prod_order_no)
+    if not g or not g["total_qty"]:
+        raise HTTPException(status_code=404, detail=f"{body.prod_order_no} isn't in the latest {line['label'].lower()} export.")
+    total = g["total_qty"]
+    stages = list(line["stages"])
+    idx = stages.index(body.stage)
+    to_complete = stages[: idx + 1] if body.finish else stages[:idx]
+
+    existing = dict(get_stage_progress(body.prod_order_no) or {})
+    who = actor(request)
+    for st in to_complete:
+        if (existing.get(f"{st}_done") or 0) < total:
+            set_stage_progress(body.prod_order_no, st, total, who)
+        end_work(body.prod_order_no, st, "complete")
+    if not body.finish:
+        start_work(body.prod_order_no, body.stage, who)
+    write_audit(who, "work.finish" if body.finish else "work.advance", f"{body.prod_order_no} {body.stage}")
+    return {"progress": dict(get_stage_progress(body.prod_order_no) or {}), "total_qty": total}
+
+
 @app.post("/api/work/stop")
 def api_work_stop(request: Request, body: WorkIn):
     """Stop your own session; with none of your own, stop the job at that step

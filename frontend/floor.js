@@ -121,18 +121,6 @@
     return row[`${stage}_done`] || 0;
   }
 
-  // The API refuses a stage that would run ahead of the one before it, so grey
-  // those out here too rather than letting someone tap into an error.
-  function ceilingFor(row, index) {
-    const st = stagesOf(row);
-    return index === 0 ? row.total_qty || 0 : doneFor(row, st[index - 1].key);
-  }
-
-  function floorFor(row, index) {
-    const st = stagesOf(row);
-    return index === st.length - 1 ? 0 : doneFor(row, st[index + 1].key);
-  }
-
   function dueLabel(row) {
     if (!row.due_date) return null;
     // The API sends "2026-08-11 00:00:00" — slice to the date so it parses the
@@ -268,55 +256,40 @@
     </span>`;
   }
 
+  // One button per step. Start on a step finishes every step before it, so the
+  // job moves along as the floor does; the last step, once started, finishes
+  // the job. Part quantities are kept to the dashboard's Factory floor tab.
   function stageHTML(row, stage, index) {
+    const steps = stagesOf(row);
     const total = row.total_qty || 0;
     const done = doneFor(row, stage.key);
-    const max = ceilingFor(row, index);
-    const min = floorFor(row, index);
     const complete = total > 0 && done >= total;
-    const locked = max <= 0 && done <= 0;
-    const busy = state.busy.has(`${row.prod_order_no}|${stage.key}`);
-
-    const note = locked
-      ? `<p class="stage-note">Do ${stagesOf(row)[index - 1].label} first.</p>`
-      : "";
-
-    // Start says this is what you're on now; it ends itself when the step is
-    // finished, or with Stop. Anyone else on it is named, and can be joined.
+    const busy = state.busy.has(row.prod_order_no);
     const on = workOn(row.prod_order_no, stage.key);
-    const mine = on.some(isMine);
-    const others = on.filter((s) => !isMine(s));
-    const who = others.length
-      ? `<span class="work-who">▶ ${esc(others.map((s) => s.username).join(", "))} since ${esc(clockOf(others[0].started_at))}</span>`
-      : "";
-    const workRow = complete
-      ? ""
-      : `<div class="work-row">
-          <button type="button" class="work-btn ${mine ? "is-on" : ""}" data-work="${mine ? "stop" : "start"}"
-                  ${busy || locked ? "disabled" : ""}>${mine ? "■ Stop" : "▶ Start"}</button>
-          ${mine ? `<span class="work-who">You since ${esc(clockOf(on.find(isMine).started_at))}</span>` : ""}
-          ${who}
-        </div>`;
+    const last = index === steps.length - 1;
+    const part = !complete && done > 0 ? `<span class="stage-count">${num(done)} / ${num(total)}</span>` : "";
 
-    return `<div class="stage ${complete ? "is-complete" : ""} ${locked ? "is-locked" : ""}"
+    let action;
+    if (complete) {
+      action = '<span class="stage-done">✓ Done</span>';
+    } else if (on.length && last) {
+      action = `<button type="button" class="work-btn is-finish" data-work="finish" ${busy ? "disabled" : ""}>■ Finish</button>`;
+    } else if (on.length) {
+      action = "";
+    } else {
+      action = `<button type="button" class="work-btn" data-work="start" ${busy ? "disabled" : ""}>▶ Start</button>`;
+    }
+    const who = on.length
+      ? `<span class="work-who">▶ ${esc(on.map((s) => (isMine(s) ? "You" : s.username)).join(", "))} since ${esc(clockOf(on[0].started_at))}</span>`
+      : "";
+
+    return `<div class="stage ${complete ? "is-complete" : ""} ${on.length ? "is-working" : ""}"
                  data-pro="${esc(row.prod_order_no)}" data-stage="${stage.key}">
       <div class="stage-top">
         <span class="stage-name">${stage.label}</span>
-        <span class="stage-count">${num(done)} / ${num(total)}</span>
+        ${part}
       </div>
-      <div class="stage-controls">
-        <button type="button" class="step" data-act="dec"
-                ${busy || done <= min ? "disabled" : ""} aria-label="One less ${stage.label}">−</button>
-        <input type="number" class="qty" inputmode="numeric" pattern="[0-9]*"
-               value="${num(done)}" min="${num(min)}" max="${num(max)}" ${busy ? "disabled" : ""}
-               aria-label="${stage.label} done">
-        <button type="button" class="step" data-act="inc"
-                ${busy || done >= max ? "disabled" : ""} aria-label="One more ${stage.label}">+</button>
-        <button type="button" class="all-btn" data-act="all"
-                ${busy || done >= max || max <= 0 ? "disabled" : ""}>All ${num(max)}</button>
-      </div>
-      ${workRow}
-      ${note}
+      <div class="work-row">${action}${who}</div>
     </div>`;
   }
 
@@ -332,49 +305,32 @@
       });
     });
 
-    document.querySelectorAll(".stage").forEach((el) => {
-      const pro = el.dataset.pro;
-      const stage = el.dataset.stage;
-      const row = state.rows.find((r) => r.prod_order_no === pro);
+    document.querySelectorAll(".stage .work-btn").forEach((btn) => {
+      const el = btn.closest(".stage");
+      const row = state.rows.find((r) => r.prod_order_no === el.dataset.pro);
       if (!row) return;
-      const index = stagesOf(row).findIndex((s) => s.key === stage);
-
-      const workBtn = el.querySelector(".work-btn");
-      if (workBtn) workBtn.addEventListener("click", () => startStop(row, stage, workBtn.dataset.work));
-
-      el.querySelectorAll("[data-act]").forEach((btn) => {
-        btn.addEventListener("click", () => {
-          const done = doneFor(row, stage);
-          const act = btn.dataset.act;
-          const next =
-            act === "inc" ? done + 1 : act === "dec" ? done - 1 : ceilingFor(row, index);
-          save(row, stage, next);
-        });
-      });
-
-      const input = el.querySelector(".qty");
-      input.addEventListener("change", () => {
-        const v = Number(input.value);
-        if (Number.isNaN(v)) return render();
-        save(row, stage, v);
-      });
-      // keep the on-screen keyboard from lingering after entry
-      input.addEventListener("keydown", (e) => {
-        if (e.key === "Enter") input.blur();
-      });
+      btn.addEventListener("click", () => advance(row, el.dataset.stage, btn.dataset.work === "finish"));
     });
   }
 
-  async function startStop(row, stage, action) {
-    const key = `${row.prod_order_no}|${stage}`;
+  async function advance(row, stage, finish) {
+    const steps = stagesOf(row);
+    const index = steps.findIndex((s) => s.key === stage);
+    const total = row.total_qty || 0;
+    // Starting further on than the next step finishes more than one; say so.
+    const skipped = steps.slice(0, index).filter((s) => doneFor(row, s.key) < total);
+    if (!finish && skipped.length > 1 &&
+        !confirm(`Starting ${steps[index].label} marks ${skipped.map((s) => s.label).join(" and ")} as done. Carry on?`)) return;
+
+    const key = row.prod_order_no;
     if (state.busy.has(key)) return;
     state.busy.add(key);
     render();
     try {
-      const res = await fetch(`/api/work/${action}`, {
+      const res = await fetch("/api/work/advance", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prod_order_no: row.prod_order_no, stage }),
+        body: JSON.stringify({ prod_order_no: row.prod_order_no, stage, finish }),
       });
       const body = await res.json().catch(() => ({}));
       if (res.status === 401) {
@@ -382,53 +338,17 @@
         throw new Error("Sign in first, so we know who's on it.");
       }
       if (!res.ok) throw new Error(body.detail || "Couldn't save that.");
-      state.work = (await getJSON("/api/work/active")).sessions || [];
-      const label = STAGE_LABELS[stage] || stage;
-      toast(`${row.prod_order_no} · ${label} ${action === "start" ? "started" : "stopped"}`, "good");
-    } catch (err) {
-      toast(err.message, "bad");
-    } finally {
-      state.busy.delete(key);
-      render();
-    }
-  }
 
-  async function save(row, stage, done) {
-    const key = `${row.prod_order_no}|${stage}`;
-    if (state.busy.has(key)) return;
-    state.busy.add(key);
-    render();
-
-    try {
-      const res = await fetch(line().progress, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prod_order_no: row.prod_order_no, stage, done: Math.max(0, done) }),
-      });
-      const body = await res.json().catch(() => ({}));
-      if (res.status === 401) {
-        openSignIn();
-        throw new Error("Sorry Bruv — look but don't touch. Sign in first.");
+      for (const s of steps) {
+        if (body.progress && body.progress[`${s.key}_done`] != null) row[`${s.key}_done`] = body.progress[`${s.key}_done`];
       }
-      if (!res.ok) throw new Error(body.detail || "Couldn't save that.");
-
-      // Trust the server's numbers over ours — it clamps to the order quantity.
-      for (const s of stagesOf(row)) {
-        if (body[`${s.key}_done`] != null) row[`${s.key}_done`] = body[`${s.key}_done`];
-      }
-      // Mirror the server's own maths so the card doesn't disagree with the
-      // dashboard: percent averages the four stages, and a job counts as
-      // finished once Finish is done.
-      const total = row.total_qty || 0;
-      const st = stagesOf(row);
-      const sum = st.reduce((t, s) => t + doneFor(row, s.key), 0);
-      row.pct_complete = total > 0 ? Math.round((sum / (total * st.length)) * 1000) / 10 : 0;
-      row.status = total > 0 && doneFor(row, st[st.length - 1].key) >= total ? "completed" : "in_production";
-      // finishing a step ends anyone's Start on it, server side
+      const sum = steps.reduce((t, s) => t + doneFor(row, s.key), 0);
+      row.pct_complete = total > 0 ? Math.round((sum / (total * steps.length)) * 1000) / 10 : 0;
+      row.status = total > 0 && doneFor(row, steps[steps.length - 1].key) >= total ? "completed" : "in_production";
       state.work = (await getJSON("/api/work/active").catch(() => ({ sessions: state.work }))).sessions || [];
 
       const label = STAGE_LABELS[stage] || stage;
-      toast(`${row.prod_order_no} · ${label} ${num(doneFor(row, stage))} of ${num(total)}`, "good");
+      toast(`${row.prod_order_no} · ${finish ? `${label} finished` : `${label} started`}`, "good");
     } catch (err) {
       toast(err.message, "bad");
     } finally {

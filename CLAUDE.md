@@ -186,7 +186,8 @@ Holding is everything with no date that isn't finished, sortable by colour
 batch (most jobs first), ETA (`eta_date`, else due) or due date. The older
 status lanes, still set by hand, and the order list are the other two toggles.
 
-Jobs gather by colour everywhere on that board. `backend/colours.py` resolves a
+Each card is filled with its powder colour (text light or dark by `inkOn()`),
+with the client name and SO at the top. Jobs gather by colour everywhere on that board. `backend/colours.py` resolves a
 job's BC `colour_code` / `colour_description` to a swatch: a colour set by hand
 (`powder_colours` table, keyed by `colour_key()`) first, then a code in the
 library, then a library name found as whole words in the description, preferring
@@ -219,9 +220,12 @@ left running). `_stop_if_finished()` ends every session on a step when a
 progress tick completes it, on all three lines. Closed rows keep the start and
 end times for timing jobs later; nothing reports on them yet.
 
-Start and Stop sit on each step of the phone app (`/floor`, which now switches
-between Doors, Cavities and Powdercoat) and on each stage cell of the Factory
-floor tab. A started job carries a green ▶ badge on its schedule card, and each
+The phone app (`/floor`, switching between Doors, Cavities and Powdercoat) has
+one button per step and no counts. Start calls `POST /api/work/advance`, which
+completes every earlier step of that job in shop order (ending their sessions)
+and starts this one; the last step, once started, shows Finish, which completes
+it too. Part quantities are entered only on the Factory floor tab, whose stage
+cells keep their number boxes and their own Start/Stop. A started job carries a green ▶ badge on its schedule card, and each
 board and the Factory floor tab has an "In production now" strip.
 
 ## Settings
