@@ -77,6 +77,12 @@ def library() -> tuple[dict, ...]:
     return _library_cached(mtime)
 
 
+def job_key(pro: str) -> str:
+    """What a colour set for one job is stored under, when BC gives that job
+    no colour at all to key it on."""
+    return "PRO:" + norm(pro)
+
+
 def colour_key(code: str | None, description: str | None) -> str:
     """What a hand-set colour is stored under: the code if BC gave one."""
     return norm(code) or norm(description)
@@ -119,7 +125,12 @@ class Matcher:
             return None
         return _lib(target, "alias")
 
-    def match(self, code: str | None, description: str | None) -> dict | None:
+    def match(self, code: str | None, description: str | None, pro: str | None = None) -> dict | None:
+        # A colour set for one job (BC gave it none) beats everything else.
+        if pro:
+            m = self.manual.get(job_key(pro))
+            if m:
+                return _out(m["colour_key"], m["name"], m.get("brand", ""), m.get("code", ""), m["hex"], "manual")
         key = (code or "", description or "")
         if key not in self._cache:
             self._cache[key] = self._match(code, description)

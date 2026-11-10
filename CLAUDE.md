@@ -221,7 +221,9 @@ the whole library (`GET /api/powder-colours?library=1`) by code or name, every
 word typed having to match, codes starting with it first, Enter taking the top
 one. The pick is saved as a hand-set colour keyed on what BC calls it
 (`match_code` / `match_name`), carrying the chart's name, code and hex, with
-BC's wording kept in `powder_colours.bc_text`. "Pick by eye" is the fallback
+BC's wording kept in `powder_colours.bc_text`. A job BC gives no colour at all
+is set on its own, keyed `PRO:<pro>` (`colours.job_key()`, `match_pro`), and
+that beats everything else for that job. "Pick by eye" is the fallback
 for a colour no chart has. Settings lists the hand-set ones, BC's name against
 what it was set to, and removes them.
 

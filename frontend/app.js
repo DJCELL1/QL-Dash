@@ -1919,7 +1919,7 @@
   function pcsSwatchHTML(j, size) {
     const hex = j.colour && j.colour.hex;
     return `<button type="button" class="pc-swatch pc-swatch-${size}${hex ? "" : " is-unknown"}"${hex ? ` style="background:${hex}"` : ""}
-      draggable="false" data-colour-code="${escapeAttr(j.colour_code || "")}"
+      draggable="false" data-pro="${escapeAttr(j.prod_order_no || "")}" data-colour-code="${escapeAttr(j.colour_code || "")}"
       data-colour-name="${escapeAttr(j.colour_description || (j.colour ? j.colour.name : ""))}"
       data-colour-hex="${hex || ""}"
       title="${escapeAttr(pcsColourName(j))}${hex ? " · " + hex : ""} — click to set the colour">${hex ? "" : "?"}</button>`;
@@ -2125,9 +2125,13 @@
     wireColourFinder();
     const picker = $("#pc-colour-picker");
     picker.addEventListener("change", async () => {
-      const { code, name } = picker.dataset;
+      const { code, name, pro } = picker.dataset;
       try {
-        await postJSON("/api/powder-colours", { code, name, hex: picker.value });
+        // a job with no colour in BC is set on its own, by its PRO
+        const body = name || code
+          ? { code, name, hex: picker.value }
+          : { code: "", name: "Picked by eye", hex: picker.value, match_pro: pro };
+        await postJSON("/api/powder-colours", body);
         await loadSubBoard();
         renderSubcontractors();
       } catch (err) {
@@ -2149,7 +2153,9 @@
   async function openColourFinder(job) {
     finderFor = job;
     const dlg = $("#colourFinder");
-    $("#colourFinderFor").textContent = [job.name, job.code].filter(Boolean).join(" · ");
+    $("#colourFinderFor").textContent = job.name || job.code
+      ? [job.name, job.code].filter(Boolean).join(" · ")
+      : `${job.pro} — BC gives it no colour, so this sets it for this job only`;
     $("#colourFinderSearch").value = "";
     dlg.hidden = false;
     $("#colourFinderSearch").focus();
@@ -2210,6 +2216,7 @@
       await postJSON("/api/powder-colours", {
         name: c.name + (c.finish ? " " + c.finish : ""), code: c.code, brand: c.range || c.brand, hex: c.hex,
         match_name: job.name || "", match_code: job.code || "",
+        ...(job.name || job.code ? {} : { match_pro: job.pro }),
       });
       closeColourFinder();
       await loadSubBoard();
@@ -2237,8 +2244,9 @@
       const job = finderFor;
       closeColourFinder();
       const picker = $("#pc-colour-picker");
-      picker.dataset.name = job.name || job.code;
+      picker.dataset.name = job.name || job.code || "";
       picker.dataset.code = job.code || "";
+      picker.dataset.pro = job.pro || "";
       picker.value = job.hex || "#808080";
       if (picker.showPicker) picker.showPicker();
       else picker.click();
@@ -2271,11 +2279,13 @@
         e.stopPropagation();
         const name = sw.dataset.colourName;
         const code = sw.dataset.colourCode;
-        if (!name && !code) {
-          notifyError(null, "BC gives no colour for this job, so there's nothing to set a colour against.");
+        // With no colour in BC the setting is per job, so a group of such jobs
+        // has no one colour to set: each job's own tile does it.
+        if (!name && !code && sw.closest(".pc-group-head")) {
+          notifyError(null, "These jobs have no colour in BC. Open the group and click each job's own tile to set it.");
           return;
         }
-        openColourFinder({ name, code, hex: sw.dataset.colourHex });
+        openColourFinder({ name, code, pro: sw.dataset.pro, hex: sw.dataset.colourHex });
       });
     });
 

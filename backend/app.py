@@ -1608,7 +1608,7 @@ def api_subcontractors():
                 "item_description": r.get("item_description"),
                 "colour_code": r.get("colour_code"),
                 "colour_description": r.get("colour_description"),
-                "colour": matcher.match(r.get("colour_code"), r.get("colour_description")),
+                "colour": matcher.match(r.get("colour_code"), r.get("colour_description"), pro),
                 "sub_po": r.get("comments"),
                 "eta_note": r.get("potential_back_order_comment"),
                 "due_date": r.get("operation_due_date"),
@@ -1763,6 +1763,8 @@ class PowderColourIn(BaseModel):
     # code and name are taken as BC's own (a colour picked by eye).
     match_code: str | None = None
     match_name: str | None = None
+    # The job, for one whose BC export carries no colour at all
+    match_pro: str | None = None
 
 
 @app.get("/api/powder-colours")
@@ -1781,13 +1783,18 @@ def api_powder_colours(library: bool = False):
 def api_set_powder_colour(request: Request, body: PowderColourIn):
     if not re.fullmatch(r"#[0-9a-fA-F]{6}", body.hex):
         raise HTTPException(status_code=400, detail="hex must look like #1A2B3C.")
-    picked = body.match_code is not None or body.match_name is not None
+    picked = body.match_code is not None or body.match_name is not None or body.match_pro is not None
     bc_code = body.match_code if picked else body.code
     bc_name = body.match_name if picked else body.name
     key = colours.colour_key(bc_code, bc_name)
+    bc_text = " · ".join(t.strip() for t in (bc_name or "", bc_code or "") if t and t.strip())
+    if not key and body.match_pro and body.match_pro.strip():
+        # BC has no colour for this job, so the setting is for this job alone
+        key = colours.job_key(body.match_pro)
+        bc_text = f"{body.match_pro.strip()} (no colour in BC)"
+        picked = True
     if not key:
         raise HTTPException(status_code=400, detail="A colour needs a code or a name.")
-    bc_text = " · ".join(t.strip() for t in (bc_name or "", bc_code or "") if t and t.strip())
     row = set_powder_colour(key, body.name.strip(), body.hex.upper(), body.code.strip(), body.brand.strip(),
                             actor(request), bc_text if picked else "")
     write_audit(actor(request), "powder_colour.set", f"{body.code or body.name} = {body.hex}")
