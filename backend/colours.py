@@ -47,7 +47,7 @@ def aliases() -> dict[frozenset, str]:
     """The shop's own names for a chart colour ("Black Satin"), as the set of
     words in it -> the chart code. Word order doesn't matter, so "Satin Black"
     is the same alias."""
-    return {frozenset(_words(a["words"]).split()): norm(a["code"])
+    return {_alias_words(_words(a["words"])): norm(a["code"])
             for a in _raw().get("aliases", []) if a.get("words") and a.get("code")}
 
 
@@ -82,6 +82,13 @@ def colour_key(code: str | None, description: str | None) -> str:
     return norm(code) or norm(description)
 
 
+# Shorthand seen in BC descriptions, spelt out before an alias is looked up.
+_ABBREV = {"BLK": "BLACK", "WHT": "WHITE", "GRY": "GREY", "MATTE": "MATT"}
+
+# Words that say nothing about which colour it is.
+_FILLER = {"FINISH", "COLOUR", "COLOR", "COATED", "POWDERCOATED", "PC", "C", "B"}
+
+
 class Matcher:
     """Resolves many jobs against one snapshot of the library and hand-set rows."""
 
@@ -101,6 +108,17 @@ class Matcher:
         self.aliases = aliases()
         self._cache: dict[tuple, dict | None] = {}
 
+    def _alias(self, words: str) -> dict | None:
+        wanted = self.aliases.get(_alias_words(words))
+        if not wanted or wanted not in self.by_code:
+            return None
+        target = self.by_code[wanted]
+        padded = f" {words} "
+        # "Interpon Black Satin" is Interpon's, not the shop's Dulux one
+        if any(f" {w} " in padded for b, ws in _BRAND_WORDS.items() if b != target["brand"] for w in ws):
+            return None
+        return _lib(target, "alias")
+
     def match(self, code: str | None, description: str | None) -> dict | None:
         key = (code or "", description or "")
         if key not in self._cache:
@@ -113,14 +131,12 @@ class Matcher:
                 m = self.manual[k]
                 return _out(m["colour_key"], m["name"], m.get("brand", ""), m.get("code", ""), m["hex"], "manual")
         words = _words(description)
-        wanted = self.aliases.get(frozenset(w for w in words.split() if w not in _BRAND_ONLY))
-        if wanted and wanted in self.by_code:
-            target = self.by_code[wanted]
-            padded = f" {words} "
-            # "Interpon Black Satin" is Interpon's, not the shop's Dulux one
-            other = any(f" {w} " in padded for b, ws in _BRAND_WORDS.items() if b != target["brand"] for w in ws)
-            if not other:
-                return _lib(target, "alias")
+        # BC sometimes puts the colour in the code column instead, so an alias
+        # is looked for in either, and in the two together.
+        for text in (description, code, f"{code or ''} {description or ''}"):
+            hit = self._alias(_words(text))
+            if hit:
+                return hit
         for token in [norm(code)] + [norm(t) for t in words.split()]:
             if token and token in self.by_code:
                 return _lib(self.by_code[token], "code")
@@ -175,6 +191,12 @@ def _best(candidates: list[dict], words: str) -> dict:
         return s
 
     return max(candidates, key=score)
+
+
+def _alias_words(words: str) -> frozenset:
+    """The words an alias is matched on: brand, range and filler words
+    dropped, shop shorthand ("BLK") spelt out."""
+    return frozenset(_ABBREV.get(w, w) for w in words.split() if w not in _BRAND_ONLY and w not in _FILLER)
 
 
 def _lib(c: dict, how: str) -> dict:

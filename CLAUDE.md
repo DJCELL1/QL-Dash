@@ -198,8 +198,12 @@ unmatched, because neither chart covers RAL.
 Before any of that, `aliases` in `powder_colours.json` map the shop's own names
 to a chart code by their set of words, so order doesn't matter: "Black Satin"
 and "Satin Black" are Duralloy RapidCure Black (C/B Night Sky) Satin
-`2609128S`. Brand and range words are ignored, the finish is not, and an alias
-steps aside when the description names a different brand. Add new ones there.
+`2609128S`, as are "Night Sky Satin" and "Satin Blk". Brand, range and filler
+words (Finish, Colour, PC) are ignored and shorthand like BLK is spelt out
+(`_ABBREV`, `_FILLER`); the finish is not ignored. An alias is looked for in
+the description, the colour code column and the two together, because BC
+sometimes puts the colour name in the code column. It steps aside when the
+description names a different brand. Add new ones there.
 
 The library is `backend/powder_colours.json`, 285 colours. 213 were built from
 the Dulux Duralloy Solid Colour Range and Interpon D2525/D3020 Commercial
