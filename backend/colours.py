@@ -216,4 +216,12 @@ def _lib(c: dict, how: str) -> dict:
 
 
 def _out(key, name, brand, code, hex_, how) -> dict:
+    # The key is what the board batches jobs by, so it names the paint, not the
+    # route to it: every job that ends up as 2609128S shares one batch whether
+    # it matched by name, by alias or was picked by hand. A colour picked by eye
+    # has no chart code, so its colour stands in.
+    if code:
+        key = "col:" + norm(code)
+    elif hex_:
+        key = "hex:" + str(hex_).upper()
     return {"key": key, "name": name, "brand": brand, "code": code, "hex": hex_, "matched_by": how}

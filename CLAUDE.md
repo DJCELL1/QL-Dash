@@ -187,7 +187,9 @@ batch (most jobs first), ETA (`eta_date`, else due) or due date. The older
 status lanes, still set by hand, and the order list are the other two toggles.
 
 Each card is filled with its powder colour (text light or dark by `inkOn()`),
-with the client name and SO at the top. Jobs gather by colour everywhere on that board. `backend/colours.py` resolves a
+with the client name and SO at the top. Jobs gather by colour everywhere on that board, batched on the matched colour's
+`key`: `col:<chart code>` however the job got there (name, alias or set by
+hand), or `hex:<colour>` for one picked by eye. `backend/colours.py` resolves a
 job's BC `colour_code` / `colour_description` to a swatch: a colour set by hand
 (`powder_colours` table, keyed by `colour_key()`) first, then a code in the
 library, then a library name found as whole words in the description, preferring
