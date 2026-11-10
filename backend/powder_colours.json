@@ -1,5 +1,5 @@
 {
- "source": "Dulux Duralloy Solid Colour Range and Interpon D2525/D3020 Commercial Collection charts",
+ "source": "Dulux Duralloy Solid Colour Range, Dulux Duratec colour list and Interpon D2525/D3020 Commercial Collection",
  "aliases": [
   {
    "words": "BLACK SATIN",
@@ -1711,6 +1711,582 @@
    "name": "Pale Eucalypt",
    "finish": "Satin",
    "hex": "#848A76"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duratec Elements",
+   "code": "9E11373F",
+   "name": "White",
+   "finish": "Flat",
+   "hex": "#F1F2F0"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duratec Elements",
+   "code": "9E11330F",
+   "name": "Surfmist",
+   "finish": "Flat",
+   "hex": "#D9D8D1"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duratec Elements",
+   "code": "9E23245F",
+   "name": "Stone",
+   "finish": "Flat",
+   "hex": "#BFB0A0"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duratec Elements",
+   "code": "9E27888F",
+   "name": "Granite",
+   "finish": "Flat",
+   "hex": "#AAACA9"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duratec Elements",
+   "code": "9E27756F",
+   "name": "Silver",
+   "finish": "Flat",
+   "hex": "#A1A3A1"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duratec Elements",
+   "code": "9E22270F",
+   "name": "Gold Ore",
+   "finish": "Flat",
+   "hex": "#BE8F4C"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duratec Elements",
+   "code": "9E38341F",
+   "name": "Natural Bronze Kinetic",
+   "finish": "Flat",
+   "hex": "#746354"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duratec Elements",
+   "code": "9E28340F",
+   "name": "Weathered Steel",
+   "finish": "Flat",
+   "hex": "#664B42"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duratec Elements",
+   "code": "9E17724F",
+   "name": "Monument",
+   "finish": "Flat",
+   "hex": "#4F5051"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duratec Elements",
+   "code": "9E27725F",
+   "name": "Magnetite",
+   "finish": "Flat",
+   "hex": "#4A4B4D"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duratec Elements",
+   "code": "9E28184F",
+   "name": "Dark Bronze",
+   "finish": "Flat",
+   "hex": "#474340"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duratec Elements",
+   "code": "9E19190F",
+   "name": "Black (Night Sky)",
+   "finish": "Flat",
+   "hex": "#3B3C3C"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duratec Eternity",
+   "code": "90T1138S",
+   "name": "Linen Pearl",
+   "finish": "Satin",
+   "hex": "#E3E0D9"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duratec Eternity",
+   "code": "90T7763M",
+   "name": "Nickel Pearl",
+   "finish": "Matt",
+   "hex": "#AAA196"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duratec Eternity",
+   "code": "90T7024M",
+   "name": "Citi Silver Pearl",
+   "finish": "Matt",
+   "hex": "#B0B6B9"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duratec Eternity",
+   "code": "90T7761M",
+   "name": "Chain Pearl",
+   "finish": "Matt",
+   "hex": "#ABACA9"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duratec Eternity",
+   "code": "91T3059M",
+   "name": "Champagne Kinetic",
+   "finish": "Matt",
+   "hex": "#988D82"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duratec Eternity",
+   "code": "91T7183M",
+   "name": "Copper Metallic Kinetic",
+   "finish": "Matt",
+   "hex": "#9F948A"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duratec Eternity",
+   "code": "91T7160S",
+   "name": "Silver Pearl Kinetic",
+   "finish": "Satin",
+   "hex": "#9CA0A2"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duratec Eternity",
+   "code": "90T7764S",
+   "name": "Pewter Pearl",
+   "finish": "Satin",
+   "hex": "#8A8F8F"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duratec Eternity",
+   "code": "91T8360M",
+   "name": "Fine Gold Pearl Kinetic",
+   "finish": "Matt",
+   "hex": "#B79359"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duratec Eternity",
+   "code": "91T8431M",
+   "name": "Vintage Copper Pearl Kinetic",
+   "finish": "Matt",
+   "hex": "#8A7058"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duratec Eternity",
+   "code": "91T8115M",
+   "name": "Gunmetal Metallic Kinetic",
+   "finish": "Matt",
+   "hex": "#686664"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duratec Eternity",
+   "code": "91T7765S",
+   "name": "Titanium Pearl Kinetic",
+   "finish": "Satin",
+   "hex": "#6B6D6B"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duratec Eternity",
+   "code": "91T8356S",
+   "name": "Bronze Pearl Kinetic",
+   "finish": "Satin",
+   "hex": "#60574C"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duratec Eternity",
+   "code": "90T7762S",
+   "name": "Charcoal Pearl",
+   "finish": "Satin",
+   "hex": "#444343"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duratec Eternity",
+   "code": "90T7835M",
+   "name": "Midnight Pearl",
+   "finish": "Matt",
+   "hex": "#4A494A"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duratec Eternity",
+   "code": "90T7797M",
+   "name": "Ethereal Pearl",
+   "finish": "Matt",
+   "hex": "#5D5955"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duratec Intensity",
+   "code": "90N6486S",
+   "name": "Juicy Lime",
+   "finish": "Satin",
+   "hex": "#B5C361"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duratec Intensity",
+   "code": "90N5011G",
+   "name": "Reef",
+   "finish": "Gloss",
+   "hex": "#127FC1"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duratec Intensity",
+   "code": "90N4383G",
+   "name": "Tomcat",
+   "finish": "Gloss",
+   "hex": "#C46045"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duratec Intensity",
+   "code": "90N2004S",
+   "name": "Moonlight",
+   "finish": "Satin",
+   "hex": "#F1CC46"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duratec Intensity",
+   "code": "90N6167S",
+   "name": "Leaf",
+   "finish": "Satin",
+   "hex": "#60914F"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duratec Intensity",
+   "code": "90N5233S",
+   "name": "Coast",
+   "finish": "Satin",
+   "hex": "#007293"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duratec Intensity",
+   "code": "90N4007G",
+   "name": "Flame",
+   "finish": "Gloss",
+   "hex": "#B53C37"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duratec Intensity",
+   "code": "90N2084G",
+   "name": "Sunshine",
+   "finish": "Gloss",
+   "hex": "#E9AF42"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duratec Intensity",
+   "code": "90N6005S",
+   "name": "Evergreen",
+   "finish": "Satin",
+   "hex": "#3D6E4C"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duratec Intensity",
+   "code": "90N5365S",
+   "name": "Storm",
+   "finish": "Satin",
+   "hex": "#34445D"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duratec Intensity",
+   "code": "90N4227S",
+   "name": "Desert",
+   "finish": "Satin",
+   "hex": "#89453E"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duratec Zeus",
+   "code": "90Z1376M",
+   "name": "Whisper White",
+   "finish": "Matt",
+   "hex": "#EDEBE2"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duratec Zeus",
+   "code": "90Z1380M",
+   "name": "Natural White",
+   "finish": "Matt",
+   "hex": "#F0ECE5"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duratec Zeus",
+   "code": "90Z1341S",
+   "name": "Appliance White",
+   "finish": "Satin",
+   "hex": "#F4F5F3"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duratec Zeus",
+   "code": "90Z1110M",
+   "name": "White",
+   "finish": "Matt",
+   "hex": "#F3F6F1"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duratec Zeus",
+   "code": "90Z2266M",
+   "name": "Surfmist",
+   "finish": "Matt",
+   "hex": "#D9D8D0"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duratec Zeus",
+   "code": "90Z2266S",
+   "name": "Surfmist",
+   "finish": "Satin",
+   "hex": "#DAD8D0"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duratec Zeus",
+   "code": "90Z1344S",
+   "name": "Talc",
+   "finish": "Satin",
+   "hex": "#E7E3DB"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duratec Zeus",
+   "code": "90Z1110G",
+   "name": "White",
+   "finish": "Gloss",
+   "hex": "#F5F7F3"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duratec Zeus",
+   "code": "90Z7769M",
+   "name": "Lunar Grey",
+   "finish": "Matt",
+   "hex": "#CCCDC9"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duratec Zeus",
+   "code": "90Z7557M",
+   "name": "Shale Grey",
+   "finish": "Matt",
+   "hex": "#B9BAB7"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duratec Zeus",
+   "code": "90Z7557S",
+   "name": "Shale Grey",
+   "finish": "Satin",
+   "hex": "#B9BBB7"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duratec Zeus",
+   "code": "90Z7770M",
+   "name": "Silver Grey",
+   "finish": "Matt",
+   "hex": "#B2B6B8"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duratec Zeus",
+   "code": "90Z3174M",
+   "name": "Paperbark",
+   "finish": "Matt",
+   "hex": "#CBB9A2"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duratec Zeus",
+   "code": "90Z2116S",
+   "name": "Paperbark",
+   "finish": "Satin",
+   "hex": "#CDBBA5"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duratec Zeus",
+   "code": "90Z7558S",
+   "name": "Dune",
+   "finish": "Satin",
+   "hex": "#B2AAA1"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duratec Zeus",
+   "code": "90Z7558M",
+   "name": "Dune",
+   "finish": "Matt",
+   "hex": "#B1AAA1"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duratec Zeus",
+   "code": "90Z7768S",
+   "name": "Grey",
+   "finish": "Satin",
+   "hex": "#797D7F"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duratec Zeus",
+   "code": "90Z7865M",
+   "name": "Basalt",
+   "finish": "Matt",
+   "hex": "#6A6C6D"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duratec Zeus",
+   "code": "90Z7865S",
+   "name": "Basalt",
+   "finish": "Satin",
+   "hex": "#696C6D"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duratec Zeus",
+   "code": "90Z7315S",
+   "name": "Timberland",
+   "finish": "Satin",
+   "hex": "#63625D"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duratec Zeus",
+   "code": "90Z6127M",
+   "name": "Pale Eucalypt",
+   "finish": "Matt",
+   "hex": "#858977"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duratec Zeus",
+   "code": "90Z6127S",
+   "name": "Pale Eucalypt",
+   "finish": "Satin",
+   "hex": "#868B78"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duratec Zeus",
+   "code": "90Z6271M",
+   "name": "Wilderness",
+   "finish": "Matt",
+   "hex": "#6E796D"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duratec Zeus",
+   "code": "90Z6458S",
+   "name": "Wilderness",
+   "finish": "Satin",
+   "hex": "#717A6E"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duratec Zeus",
+   "code": "90Z4352M",
+   "name": "Very Terracotta",
+   "finish": "Matt",
+   "hex": "#A65D44"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duratec Zeus",
+   "code": "90Z4411M",
+   "name": "Territory Red",
+   "finish": "Matt",
+   "hex": "#8F5242"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duratec Zeus",
+   "code": "90Z8189M",
+   "name": "Monument",
+   "finish": "Matt",
+   "hex": "#505151"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duratec Zeus",
+   "code": "90Z7307S",
+   "name": "Monument",
+   "finish": "Satin",
+   "hex": "#515152"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duratec Zeus",
+   "code": "90Z7766S",
+   "name": "Charcoal",
+   "finish": "Satin",
+   "hex": "#4A4D50"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duratec Zeus",
+   "code": "90Z7767M",
+   "name": "Dark Grey",
+   "finish": "Matt",
+   "hex": "#494F52"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duratec Zeus",
+   "code": "90Z9203S",
+   "name": "Lunar Eclipse",
+   "finish": "Satin",
+   "hex": "#3A3B3B"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duratec Zeus",
+   "code": "90Z9234M",
+   "name": "Graphite",
+   "finish": "Matt",
+   "hex": "#434648"
+  },
+  {
+   "brand": "Dulux",
+   "range": "Duratec Zeus",
+   "code": "90Z9202M",
+   "name": "Black",
+   "finish": "Matt",
+   "hex": "#3A3B3B"
   }
  ]
 }

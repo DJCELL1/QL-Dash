@@ -201,11 +201,16 @@ and "Satin Black" are Duralloy RapidCure Black (C/B Night Sky) Satin
 `2609128S`. Brand and range words are ignored, the finish is not, and an alias
 steps aside when the description names a different brand. Add new ones there.
 
-The library is `backend/powder_colours.json`, 213 colours built from the Dulux
-Duralloy Solid Colour Range and Interpon D2525/D3020 Commercial Collection PDFs
-by `tools/extract_powder_colours.py`. Interpon prints RGB values. Dulux only has
-picture swatches, sampled from the images themselves, so they read slightly
-lighter than the paint. Clicking a tile sets a colour by hand; Settings lists
+The library is `backend/powder_colours.json`, 285 colours. 213 were built from
+the Dulux Duralloy Solid Colour Range and Interpon D2525/D3020 Commercial
+Collection PDFs by `tools/extract_powder_colours.py`: Interpon prints RGB
+values; Duralloy only has picture swatches, sampled from the images, so they
+read slightly lighter than the paint. The other 72 are Dulux Duratec (Zeus,
+Eternity, Elements, Intensity) from Dulux's colour-list CSV, merged by
+`tools/import_colour_csv.py`, hex as the CSV gives it. Each tool replaces only
+the ranges it produces, so re-running one keeps the other's colours. A
+description naming a range (Duratec, Zeus, Duralloy, D2525...) prefers that
+range's version of a shared name like Monument. Clicking a tile sets a colour by hand; Settings lists
 and removes those.
 
 ## Start and Stop: what's in production now

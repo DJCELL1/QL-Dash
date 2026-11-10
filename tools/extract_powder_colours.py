@@ -96,12 +96,16 @@ with pdfplumber.open(dulux_pdf) as pdf:
             if name and part["hex"]:
                 colours.append({"brand": "Dulux", "range": "Duralloy RapidCure" if code.startswith("26") else "Duralloy", "code": code, "name": name, "finish": finish, "hex": part["hex"]})
 
-# the shop's aliases are typed in by hand, so carry them over from the old file
+# the shop's aliases are typed in by hand, and other ranges (Duratec, from
+# tools/import_colour_csv.py) come from elsewhere, so carry both over
 try:
-    aliases = json.load(open(out_path)).get("aliases", [])
+    old = json.load(open(out_path))
 except (OSError, ValueError):
-    aliases = []
-json.dump({"source": "Dulux Duralloy Solid Colour Range and Interpon D2525/D3020 Commercial Collection charts",
-           "aliases": aliases, "colours": colours}, open(out_path, "w"), indent=1, ensure_ascii=False)
+    old = {}
+made = {c["range"] for c in colours}
+others = [c for c in old.get("colours", []) if c.get("range") not in made]
+json.dump({"source": old.get("source", "Dulux and Interpon powder coat colour charts"),
+           "aliases": old.get("aliases", []), "colours": colours + others},
+          open(out_path, "w"), indent=1, ensure_ascii=False)
 from collections import Counter
 print(Counter((c["brand"], c["range"]) for c in colours))

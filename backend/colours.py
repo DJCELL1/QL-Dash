@@ -141,14 +141,20 @@ class Matcher:
 
 
 # Brand and range words, which an alias ignores; the finish is part of an alias.
-_BRAND_ONLY = {"DULUX", "DURALLOY", "INTERPON", "POWDER", "POWDERCOAT", "COAT", "RAPIDCURE"}
+_BRAND_ONLY = {"DULUX", "DURALLOY", "DURATEC", "INTERPON", "POWDER", "POWDERCOAT", "COAT", "RAPIDCURE"}
+
+# Words naming one range within a brand. A description that says Duratec (or
+# Zeus, Eternity...) means that range's Monument, not Duralloy's.
+_RANGE_WORDS = {"DURALLOY", "DURATEC", "ZEUS", "ETERNITY", "ELEMENTS", "INTENSITY",
+                "D2525", "D3020", "STRUCTURA", "RAPIDCURE"}
 
 # Words a description carries around the colour's name: brand, range and finish.
-_NOISE = {"DULUX", "DURALLOY", "INTERPON", "D2525", "D3020", "POWDER", "POWDERCOAT", "COAT",
+_NOISE = {"DULUX", "DURALLOY", "DURATEC", "ZEUS", "ETERNITY", "ELEMENTS", "INTENSITY",
+          "INTERPON", "D2525", "D3020", "POWDER", "POWDERCOAT", "COAT",
           "MATT", "SATIN", "GLOSS", "FLAT", "TEXTURE", "LOW", "COLORBOND", "COLOURBOND", "RAPIDCURE"}
 
 # Words in a description that point at one brand's version of a shared name.
-_BRAND_WORDS = {"Dulux": ("DULUX", "DURALLOY"), "Interpon": ("INTERPON", "D2525", "D3020")}
+_BRAND_WORDS = {"Dulux": ("DULUX", "DURALLOY", "DURATEC"), "Interpon": ("INTERPON", "D2525", "D3020")}
 
 
 def _best(candidates: list[dict], words: str) -> dict:
@@ -159,6 +165,8 @@ def _best(candidates: list[dict], words: str) -> dict:
     def score(c):
         s = 0
         if any(f" {b} " in padded for b in _BRAND_WORDS.get(c["brand"], ())):
+            s += 2
+        if any(f" {w} " in padded for w in _words(c.get("range", "")).split() if w in _RANGE_WORDS):
             s += 2
         if c["finish"] and f" {_words(c['finish'])} " in padded:
             s += 1
