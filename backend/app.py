@@ -1759,26 +1759,37 @@ class PowderColourIn(BaseModel):
     name: str
     hex: str
     brand: str = ""
+    # What BC calls the colour, which is what the setting is keyed on. Absent,
+    # code and name are taken as BC's own (a colour picked by eye).
+    match_code: str | None = None
+    match_name: str | None = None
 
 
 @app.get("/api/powder-colours")
-def api_powder_colours():
+def api_powder_colours(library: bool = False):
     lib = colours.library()
     brands: dict[str, int] = {}
     for c in lib:
         brands[c["brand"] or "Other"] = brands.get(c["brand"] or "Other", 0) + 1
-    return {"library_count": len(lib), "library_brands": brands, "manual": get_powder_colours()}
+    out = {"library_count": len(lib), "library_brands": brands, "manual": get_powder_colours()}
+    if library:
+        out["library"] = list(lib)
+    return out
 
 
 @app.post("/api/powder-colours")
 def api_set_powder_colour(request: Request, body: PowderColourIn):
     if not re.fullmatch(r"#[0-9a-fA-F]{6}", body.hex):
         raise HTTPException(status_code=400, detail="hex must look like #1A2B3C.")
-    key = colours.colour_key(body.code, body.name)
+    picked = body.match_code is not None or body.match_name is not None
+    bc_code = body.match_code if picked else body.code
+    bc_name = body.match_name if picked else body.name
+    key = colours.colour_key(bc_code, bc_name)
     if not key:
         raise HTTPException(status_code=400, detail="A colour needs a code or a name.")
+    bc_text = " · ".join(t.strip() for t in (bc_name or "", bc_code or "") if t and t.strip())
     row = set_powder_colour(key, body.name.strip(), body.hex.upper(), body.code.strip(), body.brand.strip(),
-                            actor(request))
+                            actor(request), bc_text if picked else "")
     write_audit(actor(request), "powder_colour.set", f"{body.code or body.name} = {body.hex}")
     return row
 

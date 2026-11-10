@@ -119,6 +119,18 @@
       </div>
       <div class="sub-error" id="subboard-error" hidden></div>
       <input type="color" id="pc-colour-picker" class="pc-colour-picker" tabindex="-1" aria-hidden="true">
+      <div class="colour-finder" id="colourFinder" hidden>
+        <div class="colour-finder-box" role="dialog" aria-labelledby="colourFinderTitle">
+          <div class="colour-finder-head">
+            <h3 id="colourFinderTitle">Set the colour</h3>
+            <button type="button" class="btn" id="colourFinderClose">Close</button>
+          </div>
+          <p class="leveling-note">For <b id="colourFinderFor"></b>. Type the colour code or name, then pick it. Every job in this colour follows.</p>
+          <input type="search" class="search-input" id="colourFinderSearch" placeholder="e.g. 2609128S, 90Z8189M, monument satin" autocomplete="off" spellcheck="false">
+          <div class="colour-finder-list" id="colourFinderList"></div>
+          <button type="button" class="btn" id="colourFinderByEye">Not in the charts? Pick by eye…</button>
+        </div>
+      </div>
 
       <div id="sub-schedule" hidden>
         <div class="chart-card-head schedule-head">

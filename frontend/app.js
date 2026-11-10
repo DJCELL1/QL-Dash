@@ -2122,6 +2122,7 @@
       renderPcsSchedule();
     });
 
+    wireColourFinder();
     const picker = $("#pc-colour-picker");
     picker.addEventListener("change", async () => {
       const { code, name } = picker.dataset;
@@ -2132,6 +2133,115 @@
       } catch (err) {
         if (!err.needsSignIn) notifyError(err, "Couldn't save that colour.");
       }
+    });
+  }
+
+  // ---------- setting a colour from the charts ----------
+  //
+  // Clicking a tile opens a search over the Dulux, Duratec and Interpon charts:
+  // type a code (2609128S, 90Z8189M) or a name and pick the swatch. The choice
+  // is stored against what BC calls the colour, so every job in it follows.
+  // Picking by eye is still there for a colour no chart has.
+
+  let colourLibrary = null;
+  let finderFor = null;
+
+  async function openColourFinder(job) {
+    finderFor = job;
+    const dlg = $("#colourFinder");
+    $("#colourFinderFor").textContent = [job.name, job.code].filter(Boolean).join(" · ");
+    $("#colourFinderSearch").value = "";
+    dlg.hidden = false;
+    $("#colourFinderSearch").focus();
+    if (!colourLibrary) {
+      $("#colourFinderList").innerHTML = '<div class="cell-muted">Loading the colour charts…</div>';
+      try {
+        colourLibrary = (await fetchJSON("/api/powder-colours?library=1")).library || [];
+      } catch (e) {
+        colourLibrary = null;
+        $("#colourFinderList").innerHTML = '<div class="cell-muted">Couldn\'t load the colour charts.</div>';
+        return;
+      }
+    }
+    // start from what BC says, so the likely answer is already on screen
+    const guess = (job.code || job.name || "").replace(/\b(DULUX|DURALLOY|DURATEC|INTERPON|POWDERCOAT|POWDER|COAT)\b/gi, "").trim();
+    $("#colourFinderSearch").value = guess && finderMatches(guess).length ? guess : "";
+    renderColourFinder();
+  }
+
+  function closeColourFinder() {
+    $("#colourFinder").hidden = true;
+    finderFor = null;
+  }
+
+  // Every word typed has to appear in the colour's code, name, finish or range,
+  // so "black satin" and "2609" both narrow it the way you'd expect. Codes that
+  // start with what's typed come first.
+  function finderMatches(q) {
+    const words = q.toUpperCase().split(/[^A-Z0-9]+/).filter(Boolean);
+    if (!words.length) return colourLibrary.slice(0, 40);
+    const hay = (c) => `${c.code} ${c.name} ${c.finish} ${c.range} ${c.brand}`.toUpperCase();
+    const first = words[0];
+    return colourLibrary
+      .filter((c) => words.every((w) => hay(c).includes(w)))
+      .sort((a, b) => (b.code.toUpperCase().startsWith(first) ? 1 : 0) - (a.code.toUpperCase().startsWith(first) ? 1 : 0))
+      .slice(0, 60);
+  }
+
+  function renderColourFinder() {
+    const list = $("#colourFinderList");
+    const hits = finderMatches($("#colourFinderSearch").value);
+    list.innerHTML = hits.length
+      ? hits.map((c, i) => `<button type="button" class="finder-item" data-i="${i}">
+          <span class="finder-swatch" style="background:${c.hex}"></span>
+          <span class="finder-text"><b>${escapeAttr(c.name)}</b> ${escapeAttr(c.finish)}
+            <span class="cell-muted">${escapeAttr([c.range || c.brand, c.code].filter(Boolean).join(" · "))}</span></span>
+        </button>`).join("")
+      : '<div class="cell-muted">No chart colour matches. Try the code, or pick by eye below.</div>';
+    $$("#colourFinderList .finder-item").forEach((btn) => {
+      btn.onclick = () => saveFinderColour(hits[Number(btn.dataset.i)]);
+    });
+  }
+
+  async function saveFinderColour(c) {
+    const job = finderFor;
+    if (!job) return;
+    try {
+      await postJSON("/api/powder-colours", {
+        name: c.name + (c.finish ? " " + c.finish : ""), code: c.code, brand: c.range || c.brand, hex: c.hex,
+        match_name: job.name || "", match_code: job.code || "",
+      });
+      closeColourFinder();
+      await loadSubBoard();
+      renderSubcontractors();
+    } catch (err) {
+      if (!err.needsSignIn) notifyError(err, "Couldn't save that colour.");
+    }
+  }
+
+  function wireColourFinder() {
+    const search = $("#colourFinderSearch");
+    let t = null;
+    search.addEventListener("input", () => { clearTimeout(t); t = setTimeout(renderColourFinder, 80); });
+    search.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") closeColourFinder();
+      // Enter takes the top match, so typing a full code and pressing Enter is enough
+      if (e.key === "Enter") {
+        const hits = finderMatches(search.value);
+        if (hits.length) saveFinderColour(hits[0]);
+      }
+    });
+    $("#colourFinderClose").addEventListener("click", closeColourFinder);
+    $("#colourFinder").addEventListener("click", (e) => { if (e.target.id === "colourFinder") closeColourFinder(); });
+    $("#colourFinderByEye").addEventListener("click", () => {
+      const job = finderFor;
+      closeColourFinder();
+      const picker = $("#pc-colour-picker");
+      picker.dataset.name = job.name || job.code;
+      picker.dataset.code = job.code || "";
+      picker.value = job.hex || "#808080";
+      if (picker.showPicker) picker.showPicker();
+      else picker.click();
     });
   }
 
@@ -2165,12 +2275,7 @@
           notifyError(null, "BC gives no colour for this job, so there's nothing to set a colour against.");
           return;
         }
-        const picker = $("#pc-colour-picker");
-        picker.dataset.name = name || code;
-        picker.dataset.code = code;
-        picker.value = sw.dataset.colourHex || "#808080";
-        if (picker.showPicker) picker.showPicker();
-        else picker.click();
+        openColourFinder({ name, code, hex: sw.dataset.colourHex });
       });
     });
 
@@ -5512,14 +5617,15 @@
       : "No colour charts loaded yet, so only colours set by hand show a swatch.";
     const table = $("#settings-powder-colours");
     table.querySelector("thead").innerHTML =
-      "<tr><th></th><th>Colour in BC</th><th>Code</th><th>Hex</th><th>Set by</th><th></th></tr>";
+      "<tr><th></th><th>Colour in BC</th><th>Set to</th><th>Code</th><th>Hex</th><th>Set by</th><th></th></tr>";
     table.querySelector("tbody").innerHTML = d.manual.length
       ? d.manual.map((c) => `<tr>
           <td><span class="pc-swatch pc-swatch-sm" style="background:${c.hex}"></span></td>
-          <td>${escapeAttr(c.name)}</td><td>${escapeAttr(c.code || "—")}</td><td>${c.hex}</td>
+          <td>${escapeAttr(c.bc_text || c.name)}</td><td>${c.bc_text ? escapeAttr(c.name) : '<span class="cell-muted">picked by eye</span>'}</td>
+          <td>${escapeAttr(c.code || "—")}</td><td>${c.hex}</td>
           <td class="cell-muted">${escapeAttr(c.updated_by || "")}</td>
           <td><button class="btn" data-colour-key="${escapeAttr(c.colour_key)}">Remove</button></td></tr>`).join("")
-      : '<tr><td colspan="6" class="cell-muted">None — click a colour tile on the powdercoat schedule to set one.</td></tr>';
+      : '<tr><td colspan="7" class="cell-muted">None — click a colour tile on the powdercoat schedule to set one.</td></tr>';
     $$("#settings-powder-colours [data-colour-key]").forEach((btn) => {
       btn.onclick = async () => {
         try {

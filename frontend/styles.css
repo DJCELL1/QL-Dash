@@ -2451,3 +2451,52 @@ body.is-gantt-open { overflow: hidden; }
 .now-chip::before { content: "▶ "; color: var(--card-done-line); }
 .now-empty { color: var(--text-muted); }
 .now-customer { font-weight: 800; }
+
+/* ---------- colour finder ---------- */
+
+.colour-finder {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 8vh 16px 16px;
+  background: rgba(0, 0, 0, 0.45);
+}
+.colour-finder[hidden] { display: none; }
+.colour-finder-box {
+  width: min(560px, 100%);
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+  border-radius: 12px;
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+}
+.colour-finder-head { display: flex; align-items: center; justify-content: space-between; }
+.colour-finder-head h3 { margin: 0; }
+.colour-finder .search-input { width: 100%; flex: none; }
+.colour-finder-list { flex: 1 1 auto; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; min-height: 120px; }
+.colour-finder-list > * { flex-shrink: 0; }
+.colour-finder-box > .btn { flex: none; }
+.finder-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--page-plane);
+  color: var(--text-primary);
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+}
+.finder-item:hover, .finder-item:focus { border-color: var(--series-1); outline: none; }
+.finder-swatch { width: 34px; height: 34px; border-radius: 6px; border: 1px solid var(--border); flex-shrink: 0; }
+.finder-text { display: flex; flex-direction: column; }

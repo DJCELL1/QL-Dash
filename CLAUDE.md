@@ -214,8 +214,16 @@ Eternity, Elements, Intensity) from Dulux's colour-list CSV, merged by
 `tools/import_colour_csv.py`, hex as the CSV gives it. Each tool replaces only
 the ranges it produces, so re-running one keeps the other's colours. A
 description naming a range (Duratec, Zeus, Duralloy, D2525...) prefers that
-range's version of a shared name like Monument. Clicking a tile sets a colour by hand; Settings lists
-and removes those.
+range's version of a shared name like Monument.
+
+Clicking a tile opens the colour finder (`openColourFinder()`): a search over
+the whole library (`GET /api/powder-colours?library=1`) by code or name, every
+word typed having to match, codes starting with it first, Enter taking the top
+one. The pick is saved as a hand-set colour keyed on what BC calls it
+(`match_code` / `match_name`), carrying the chart's name, code and hex, with
+BC's wording kept in `powder_colours.bc_text`. "Pick by eye" is the fallback
+for a colour no chart has. Settings lists the hand-set ones, BC's name against
+what it was set to, and removes them.
 
 ## Start and Stop: what's in production now
 

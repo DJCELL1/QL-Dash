@@ -335,6 +335,9 @@ CREATE TABLE IF NOT EXISTS powder_colours (
     code TEXT NOT NULL DEFAULT '',
     name TEXT NOT NULL,
     hex TEXT NOT NULL,
+    -- what BC calls it, when the colour was picked from the charts and so
+    -- carries the chart's own name and code above
+    bc_text TEXT NOT NULL DEFAULT '',
     updated_at TEXT NOT NULL,
     updated_by TEXT
 );
@@ -386,6 +389,9 @@ def _add_missing_columns(conn) -> None:
     to run on every start: the check is what the table actually has, and the
     default backfills existing rows with zero rather than disturbing them.
     """
+    if "bc_text" not in {r[1] for r in conn.execute("PRAGMA table_info(powder_colours)")}:
+        conn.execute("ALTER TABLE powder_colours ADD COLUMN bc_text TEXT NOT NULL DEFAULT ''")
+
     if "scheduled_date" not in {r[1] for r in conn.execute("PRAGMA table_info(sub_job_status)")}:
         conn.execute("ALTER TABLE sub_job_status ADD COLUMN scheduled_date TEXT")
 
@@ -1231,17 +1237,17 @@ def get_powder_colours() -> list[dict]:
 
 
 def set_powder_colour(colour_key: str, name: str, hex_: str, code: str = "", brand: str = "",
-                      user: str | None = None) -> dict:
+                      user: str | None = None, bc_text: str = "") -> dict:
     from datetime import datetime, timezone
 
     now = datetime.now(timezone.utc).isoformat()
     with get_conn() as conn:
         conn.execute(
-            "INSERT INTO powder_colours (colour_key, brand, code, name, hex, updated_at, updated_by) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(colour_key) DO UPDATE SET "
+            "INSERT INTO powder_colours (colour_key, brand, code, name, hex, bc_text, updated_at, updated_by) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(colour_key) DO UPDATE SET "
             "brand = excluded.brand, code = excluded.code, name = excluded.name, hex = excluded.hex, "
-            "updated_at = excluded.updated_at, updated_by = excluded.updated_by",
-            (colour_key, brand, code, name, hex_, now, user),
+            "bc_text = excluded.bc_text, updated_at = excluded.updated_at, updated_by = excluded.updated_by",
+            (colour_key, brand, code, name, hex_, bc_text, now, user),
         )
         return dict(conn.execute("SELECT * FROM powder_colours WHERE colour_key = ?", (colour_key,)).fetchone())
 
