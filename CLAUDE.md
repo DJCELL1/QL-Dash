@@ -170,6 +170,13 @@ subcontractor board deliberately avoids (see `fmtQtyTotals`).
 
 ## Powdercoat schedule and colours
 
+**Taken off the screens.** The Powdercoating tab, the Powdercoating line on the
+Factory floor tab and the phone app, and the Powder colours card in Settings
+were removed from the frontend because the shop doesn't use them. The backend,
+its endpoints, the colour library and all stored data are untouched, and the
+render code below is still in `app.js`, so putting the tab and toggles back in
+`index.html` / `floor.html` / `floor.js` (`LINES`) restores it.
+
 Picking material (`pc_pick`) is powdercoating's first floor step, ahead of
 Prep, Coat and Pack. When it was added, `pc_pick_done` was set from
 `pc_prep_done`, and `_seed_pc_pick()` once carried the old hand-set statuses

@@ -33,10 +33,6 @@
       url: "/api/cavities", progress: "/api/cavities/progress",
       stages: ["cav_prep", "cav_make"], unit: ["unit", "units"],
     },
-    powdercoat: {
-      url: "/api/powdercoat", progress: "/api/powdercoat/progress",
-      stages: ["pc_pick", "pc_prep", "pc_coat", "pc_pack"], unit: ["item", "items"],
-    },
   };
 
   const savedLine = (() => {

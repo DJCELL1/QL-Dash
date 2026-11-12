@@ -35,7 +35,7 @@
         chips: new Set(),
         status: localStorage.getItem("factoryStatusFilter") || "in_production",
         viewMode: localStorage.getItem("factoryViewMode") || "day",
-        line: ["cavities", "powdercoat"].includes(localStorage.getItem("factoryLine"))
+        line: ["cavities"].includes(localStorage.getItem("factoryLine"))
           ? localStorage.getItem("factoryLine")
           : "doors",
       },
@@ -5623,6 +5623,7 @@
   }
 
   async function renderPowderColours() {
+    if (!$("#settings-powder-colours")) return; // the card goes with the Powdercoating tab
     let d;
     try {
       d = await fetchJSON("/api/powder-colours");
@@ -5679,8 +5680,9 @@
       el.textContent = "No data ingested yet";
       return;
     }
-    const DATASET_LABELS = { joinery: "Doors", subcontractors: "Powdercoat", cavities: "Cavities" };
-    const parts = Object.entries(status.datasets).map(([ds, snap]) => {
+    const DATASET_LABELS = { joinery: "Doors", cavities: "Cavities" };
+    // Powdercoating is off the dashboard, so its export date isn't news here.
+    const parts = Object.entries(status.datasets).filter(([ds]) => ds !== "subcontractors").map(([ds, snap]) => {
       const label = DATASET_LABELS[ds] || ds;
       return `${label}: ${snap.snapshot_date}`;
     });
