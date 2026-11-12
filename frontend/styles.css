@@ -2431,6 +2431,7 @@ body.is-gantt-open { overflow: hidden; }
 }
 .stage-work-btn.is-on { background: var(--card-done-line); border-color: var(--card-done-line); color: #fff; }
 .stage-cell .work-badge { margin-left: 4px; }
+.work-badge.is-paused { background: var(--text-muted); }
 
 .now-strip {
   display: flex;
@@ -2449,6 +2450,8 @@ body.is-gantt-open { overflow: hidden; }
   color: var(--text-primary);
 }
 .now-chip::before { content: "▶ "; color: var(--card-done-line); }
+.now-chip.is-paused { border-color: var(--border); background: transparent; color: var(--text-muted); }
+.now-chip.is-paused::before { content: "⏸ "; color: var(--text-muted); }
 .now-empty { color: var(--text-muted); }
 .now-customer { font-weight: 800; }
 

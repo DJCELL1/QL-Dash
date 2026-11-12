@@ -246,8 +246,15 @@ one button per step and no counts. Start calls `POST /api/work/advance`, which
 completes every earlier step of that job in shop order (ending their sessions)
 and starts this one; the last step, once started, shows Finish, which completes
 it too. Part quantities are entered only on the Factory floor tab, whose stage
-cells keep their number boxes and a Start button (no Stop: a session ends when
-its step is ticked complete). A started job carries a green ▶ badge on its schedule card, and each
+cells keep their number boxes.
+
+Once you're on a step, its button is Pause (`POST /api/work/pause`, ending your
+session with reason `paused`), and a paused step shows Resume, which is Start
+again; this is on the phone and the Factory floor tab, and there is no Stop. A
+step is paused while its latest session ended with Pause (`get_paused_work()`,
+served as `paused` by `/api/work/active`); completing the step marks those
+`paused, then finished`, so nothing finished shows as paused. Paused jobs show
+greyed in the "In production now" strip. A started job carries a green ▶ badge on its schedule card, and each
 board and the Factory floor tab has an "In production now" strip.
 
 ## Settings

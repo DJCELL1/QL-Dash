@@ -2676,11 +2676,17 @@
       : `<button type="button" class="stage-complete-btn" data-pro="${r.prod_order_no}" data-stage="${stage}" title="Mark all ${fmtNum(total)} done">✓</button>`;
     const on = workFor(r.prod_order_no, stage);
     const mine = on.some(isMine);
-    // Start only: a step's sessions end when it's ticked complete, so once
-    // you're on it the badge beside the box is all that's shown.
-    const workBtn = complete || mine
+    // Start, then Pause while you're on it, then Resume. A step's sessions end
+    // by themselves when it's ticked complete.
+    const paused = !on.length && pausedFor(r.prod_order_no, stage);
+    const [work, label, tip] = mine
+      ? ["pause", "⏸ Pause", "Pause: stop the clock until you come back to it"]
+      : paused
+        ? ["start", "▶ Resume", "Pick this back up"]
+        : ["start", "▶ Start", "Start working on this now"];
+    const workBtn = complete
       ? ""
-      : `<button type="button" class="stage-work-btn" data-pro="${r.prod_order_no}" data-stage="${stage}" data-work="start" title="Start working on this now">▶ Start</button>`;
+      : `<button type="button" class="stage-work-btn ${mine ? "is-on" : ""}" data-pro="${r.prod_order_no}" data-stage="${stage}" data-work="${work}" title="${tip}">${label}</button>`;
     return `<div class="stage-cell">
       <input type="number" class="stage-input ${complete ? "is-complete" : ""}" data-pro="${r.prod_order_no}" data-stage="${stage}" min="0" max="${total}" step="1" value="${done}">
       <span class="stage-total">/ ${fmtNum(total)}</span>
@@ -6701,14 +6707,22 @@
 
   async function loadWork() {
     try {
-      state.work = (await fetchJSON("/api/work/active")).sessions || [];
+      const d = await fetchJSON("/api/work/active");
+      state.work = d.sessions || [];
+      state.paused = d.paused || [];
     } catch (e) {
       state.work = [];
+      state.paused = [];
     }
   }
 
   function workFor(pro, stage) {
     return (state.work || []).filter((s) => s.prod_order_no === pro && s.stage === stage);
+  }
+
+  // Paused and not picked back up: the step's last session ended with Pause.
+  function pausedFor(pro, stage) {
+    return (state.paused || []).find((s) => s.prod_order_no === pro && s.stage === stage) || null;
   }
 
   const isMine = (s) => !!state.user && s.username.toLowerCase() === state.user.toLowerCase();
@@ -6720,7 +6734,12 @@
 
   function workBadgeHTML(pro, stage) {
     const on = workFor(pro, stage);
-    if (!on.length) return "";
+    if (!on.length) {
+      const p = pausedFor(pro, stage);
+      return p
+        ? `<span class="work-badge is-paused" title="${escapeAttr(stageLabel(stage))} paused by ${escapeAttr(p.username)}">⏸ ${escapeAttr(p.username)} · ${clockOf(p.ended_at)}</span>`
+        : "";
+    }
     const names = [...new Set(on.map((s) => s.username))].join(", ");
     return `<span class="work-badge" title="${escapeAttr(stageLabel(stage))} started by ${escapeAttr(names)}">▶ ${escapeAttr(names)} · ${clockOf(on[0].started_at)}</span>`;
   }
@@ -6754,7 +6773,16 @@
           ${customer ? `<b class="now-customer">${escapeAttr(customer)}</b> · ` : ""}<b>${escapeAttr(j.pro)}</b> ${escapeAttr(stageLabel(j.stage))} · ${escapeAttr(j.names.join(", "))} · ${clockOf(j.since)}</span>`;
       })
       .join("");
-    el.innerHTML = `<span class="now-label">In production now</span>${chips || '<span class="now-empty">Nothing started</span>'}`;
+    // Paused jobs follow, greyed: started, not finished, waiting to be resumed.
+    const pausedChips = (state.paused || [])
+      .filter((p) => p.line === lineId)
+      .map((p) => {
+        const customer = customerForPro(p.prod_order_no);
+        return `<span class="now-chip is-paused" title="Paused ${clockOf(p.ended_at)}">
+          ${customer ? `<b class="now-customer">${escapeAttr(customer)}</b> · ` : ""}<b>${escapeAttr(p.prod_order_no)}</b> ${escapeAttr(stageLabel(p.stage))} · paused by ${escapeAttr(p.username)} · ${clockOf(p.ended_at)}</span>`;
+      })
+      .join("");
+    el.innerHTML = `<span class="now-label">In production now</span>${chips || '<span class="now-empty">Nothing started</span>'}${pausedChips}`;
   }
 
   async function loadCavities() {

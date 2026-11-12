@@ -70,6 +70,7 @@ from db import (
     delete_user,
     end_work,
     get_open_work,
+    get_paused_work,
     raise_stage_progress,
     start_work,
     first_account,
@@ -1829,7 +1830,19 @@ def api_work_active():
     sessions = []
     for s in get_open_work():
         sessions.append({**s, "line": _stage_line(s["stage"]), "label": _stage_label(s["stage"])})
-    return {"sessions": sessions}
+    paused = [{**s, "line": _stage_line(s["stage"]), "label": _stage_label(s["stage"])} for s in get_paused_work()]
+    return {"sessions": sessions, "paused": paused}
+
+
+@app.post("/api/work/pause")
+def api_work_pause(request: Request, body: WorkIn):
+    """Pause your own session; with none of your own, pause the job at that
+    step for everyone. Resume is Start again."""
+    n = end_work(body.prod_order_no, body.stage, "paused", actor(request))
+    if n == 0:
+        n = end_work(body.prod_order_no, body.stage, "paused")
+    write_audit(actor(request), "work.pause", f"{body.prod_order_no} {body.stage} ({n})")
+    return {"paused": n}
 
 
 @app.post("/api/work/start")

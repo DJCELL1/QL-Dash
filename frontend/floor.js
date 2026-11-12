@@ -92,6 +92,7 @@
     ]);
     state.rows = data.rows || [];
     state.work = work.sessions || [];
+    state.paused = work.paused || [];
     const key = todayKey();
     // Powdercoat jobs carry their day on the job itself; doors and cavities
     // are booked in the schedule.
@@ -100,6 +101,18 @@
         ? (subs.jobs || []).filter((j) => (j.scheduled_date || "").slice(0, 10) === key).map((j) => j.prod_order_no)
         : (schedule.entries || []).filter((e) => e.scheduled_date === key).map((e) => e.prod_order_no)
     );
+  }
+
+  function pausedOn(pro, stage) {
+    return (state.paused || []).find((s) => s.prod_order_no === pro && s.stage === stage) || null;
+  }
+
+  async function refreshWork() {
+    const w = await getJSON("/api/work/active").catch(() => null);
+    if (w) {
+      state.work = w.sessions || [];
+      state.paused = w.paused || [];
+    }
   }
 
   function workOn(pro, stage) {
@@ -269,19 +282,27 @@
     const last = index === steps.length - 1;
     const part = !complete && done > 0 ? `<span class="stage-count">${num(done)} / ${num(total)}</span>` : "";
 
+    // Start, then Pause while you're on it, Resume to carry on. The last step
+    // also has Finish once it's going.
+    const mine = on.some(isMine);
+    const paused = !on.length ? pausedOn(row.prod_order_no, stage.key) : null;
+    const btn = (work, text, cls) =>
+      `<button type="button" class="work-btn ${cls || ""}" data-work="${work}" ${busy ? "disabled" : ""}>${text}</button>`;
     let action;
     if (complete) {
       action = '<span class="stage-done">✓ Done</span>';
-    } else if (on.length && last) {
-      action = `<button type="button" class="work-btn is-finish" data-work="finish" ${busy ? "disabled" : ""}>■ Finish</button>`;
     } else if (on.length) {
-      action = "";
+      action = (mine ? btn("pause", "⏸ Pause", "is-pause") : "") + (last ? btn("finish", "■ Finish", "is-finish") : "");
+    } else if (paused) {
+      action = btn("start", "▶ Resume");
     } else {
-      action = `<button type="button" class="work-btn" data-work="start" ${busy ? "disabled" : ""}>▶ Start</button>`;
+      action = btn("start", "▶ Start");
     }
     const who = on.length
       ? `<span class="work-who">▶ ${esc(on.map((s) => (isMine(s) ? "You" : s.username)).join(", "))} since ${esc(clockOf(on[0].started_at))}</span>`
-      : "";
+      : paused
+        ? `<span class="work-who is-paused">⏸ Paused by ${esc(isMine(paused) ? "you" : paused.username)} at ${esc(clockOf(paused.ended_at))}</span>`
+        : "";
 
     return `<div class="stage ${complete ? "is-complete" : ""} ${on.length ? "is-working" : ""}"
                  data-pro="${esc(row.prod_order_no)}" data-stage="${stage.key}">
@@ -309,7 +330,8 @@
       const el = btn.closest(".stage");
       const row = state.rows.find((r) => r.prod_order_no === el.dataset.pro);
       if (!row) return;
-      btn.addEventListener("click", () => advance(row, el.dataset.stage, btn.dataset.work === "finish"));
+      btn.addEventListener("click", () =>
+        btn.dataset.work === "pause" ? pause(row, el.dataset.stage) : advance(row, el.dataset.stage, btn.dataset.work === "finish"));
     });
   }
 
@@ -345,10 +367,37 @@
       const sum = steps.reduce((t, s) => t + doneFor(row, s.key), 0);
       row.pct_complete = total > 0 ? Math.round((sum / (total * steps.length)) * 1000) / 10 : 0;
       row.status = total > 0 && doneFor(row, steps[steps.length - 1].key) >= total ? "completed" : "in_production";
-      state.work = (await getJSON("/api/work/active").catch(() => ({ sessions: state.work }))).sessions || [];
+      await refreshWork();
 
       const label = STAGE_LABELS[stage] || stage;
       toast(`${row.prod_order_no} · ${finish ? `${label} finished` : `${label} started`}`, "good");
+    } catch (err) {
+      toast(err.message, "bad");
+    } finally {
+      state.busy.delete(key);
+      render();
+    }
+  }
+
+  async function pause(row, stage) {
+    const key = row.prod_order_no;
+    if (state.busy.has(key)) return;
+    state.busy.add(key);
+    render();
+    try {
+      const res = await fetch("/api/work/pause", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prod_order_no: row.prod_order_no, stage }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (res.status === 401) {
+        openSignIn();
+        throw new Error("Sign in first, so we know who's on it.");
+      }
+      if (!res.ok) throw new Error(body.detail || "Couldn't save that.");
+      await refreshWork();
+      toast(`${row.prod_order_no} · ${STAGE_LABELS[stage] || stage} paused`, "good");
     } catch (err) {
       toast(err.message, "bad");
     } finally {

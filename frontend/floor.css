@@ -572,3 +572,6 @@ body.is-readonly .stage-controls { opacity: 0.5; pointer-events: none; }
 .work-btn.is-finish { background: #2f2f2f; border-color: #2f2f2f; color: #fff; }
 .stage-done { font-weight: 700; color: #2e7d32; }
 .stage.is-working { border-color: #2e7d32; box-shadow: inset 4px 0 0 0 #2e7d32; }
+
+.work-btn.is-pause { background: #f5a623; border-color: #f5a623; color: #2f2f2f; }
+.work-who.is-paused { color: var(--ink-3); }

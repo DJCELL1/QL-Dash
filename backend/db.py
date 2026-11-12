@@ -816,7 +816,27 @@ def end_work(prod_order_no: str, stage: str, reason: str, username: str | None =
         sql += " AND username = ?"
         args.append(username)
     with get_conn() as conn:
-        return conn.execute(sql, args).rowcount
+        n = conn.execute(sql, args).rowcount
+        # A finished step has nothing left to resume.
+        if reason == "complete":
+            conn.execute(
+                "UPDATE work_sessions SET ended_reason = 'paused, then finished' "
+                "WHERE prod_order_no = ? AND stage = ? AND ended_reason = 'paused'",
+                (prod_order_no, stage),
+            )
+        return n
+
+
+def get_paused_work() -> list[dict]:
+    """Steps whose most recent session was paused and nobody has picked back
+    up: the latest session on that job and step ended with Pause."""
+    with get_conn() as conn:
+        cur = conn.execute(
+            "SELECT w.* FROM work_sessions w WHERE w.ended_reason = 'paused' AND w.id = "
+            "(SELECT MAX(x.id) FROM work_sessions x WHERE x.prod_order_no = w.prod_order_no AND x.stage = w.stage) "
+            "ORDER BY w.ended_at"
+        )
+        return [dict(r) for r in cur.fetchall()]
 
 
 def get_open_work() -> list[dict]:
