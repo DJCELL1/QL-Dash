@@ -2676,9 +2676,11 @@
       : `<button type="button" class="stage-complete-btn" data-pro="${r.prod_order_no}" data-stage="${stage}" title="Mark all ${fmtNum(total)} done">✓</button>`;
     const on = workFor(r.prod_order_no, stage);
     const mine = on.some(isMine);
-    const workBtn = complete
+    // Start only: a step's sessions end when it's ticked complete, so once
+    // you're on it the badge beside the box is all that's shown.
+    const workBtn = complete || mine
       ? ""
-      : `<button type="button" class="stage-work-btn ${mine ? "is-on" : ""}" data-pro="${r.prod_order_no}" data-stage="${stage}" data-work="${mine ? "stop" : "start"}" title="${mine ? "Stop working on this" : "Start working on this now"}">${mine ? "■ Stop" : "▶ Start"}</button>`;
+      : `<button type="button" class="stage-work-btn" data-pro="${r.prod_order_no}" data-stage="${stage}" data-work="start" title="Start working on this now">▶ Start</button>`;
     return `<div class="stage-cell">
       <input type="number" class="stage-input ${complete ? "is-complete" : ""}" data-pro="${r.prod_order_no}" data-stage="${stage}" min="0" max="${total}" step="1" value="${done}">
       <span class="stage-total">/ ${fmtNum(total)}</span>

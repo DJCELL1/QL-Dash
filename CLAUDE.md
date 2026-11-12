@@ -246,7 +246,8 @@ one button per step and no counts. Start calls `POST /api/work/advance`, which
 completes every earlier step of that job in shop order (ending their sessions)
 and starts this one; the last step, once started, shows Finish, which completes
 it too. Part quantities are entered only on the Factory floor tab, whose stage
-cells keep their number boxes and their own Start/Stop. A started job carries a green ▶ badge on its schedule card, and each
+cells keep their number boxes and a Start button (no Stop: a session ends when
+its step is ticked complete). A started job carries a green ▶ badge on its schedule card, and each
 board and the Factory floor tab has an "In production now" strip.
 
 ## Settings
