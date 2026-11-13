@@ -944,9 +944,28 @@ body.is-board-view main { max-width: none; }
   overflow-x: auto;
   overflow-y: hidden;
   flex: 0 0 auto;
-  margin-bottom: 4px;
+  margin-bottom: 6px;
+  /* Stays at the top of the screen while the board is scrolled down, so the
+     days can be moved along from wherever you are on a long day. */
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  padding: 3px 0;
+  background: var(--page-plane);
+  /* A real, always-there bar rather than the thin overlay one some systems
+     draw and then hide until you're already scrolling. */
+  scrollbar-width: auto;
+  scrollbar-color: var(--text-muted) var(--gridline);
 }
 .board-scroll-top > div { height: 1px; }
+.board-scroll-top::-webkit-scrollbar { height: 14px; }
+.board-scroll-top::-webkit-scrollbar-track { background: var(--gridline); border-radius: 7px; }
+.board-scroll-top::-webkit-scrollbar-thumb {
+  background: var(--text-muted);
+  border-radius: 7px;
+  border: 3px solid var(--gridline);
+}
+.board-scroll-top::-webkit-scrollbar-thumb:hover { background: var(--series-1); }
 .board-scroll-top[hidden] { display: none; }
 
 .schedule-board {

@@ -360,6 +360,11 @@ decides what a tick is allowed to be and a refusal must not leave the grid
 showing something it isn't. Jobs measured in lengths have no whole units, so
 they get a quantity box instead.
 
+The door and cavity boards each have a scroll bar above them
+(`wireBoardScrollTop()`, `#schedule-scroll-top` / `#cavities-scroll-top`) that
+moves the board sideways, stays pinned to the top of the screen while the page
+scrolls, and hides when the days already fit.
+
 A rule worth remembering: a CSS class that sets `display` beats the `hidden`
 attribute. Both overlays carry an explicit `[hidden] { display: none; }`.
 

@@ -6976,6 +6976,7 @@
       .join("");
 
     wireCavityBoard();
+    wireBoardScrollTop("cavities-scroll-top", "cavities-board");
     renderNowStrip($("#cavities-now"), "cavities");
   }
 
