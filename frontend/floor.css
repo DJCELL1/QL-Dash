@@ -577,3 +577,21 @@ body.is-readonly .stage-controls { opacity: 0.5; pointer-events: none; }
 .work-who.is-paused { color: var(--ink-3); }
 
 .work-btn.is-done-btn { background: #2e7d32; border-color: #2e7d32; color: #fff; min-width: 7rem; }
+
+/* Counter for jobs of more than one unit: big targets for gloved hands. */
+.counter { display: flex; align-items: center; gap: 0.6rem; margin-top: 0.6rem; }
+.step-btn {
+  width: 3.2rem;
+  height: 3.2rem;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 1.6rem;
+  font-weight: 700;
+}
+.step-btn:disabled { opacity: 0.35; }
+.counter-val { font-size: 1.15rem; min-width: 4.5rem; text-align: center; }
+.counter-val b { font-size: 1.5rem; }
+.work-btn.is-undo { background: transparent; color: var(--ink-2); }

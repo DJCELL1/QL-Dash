@@ -1902,6 +1902,78 @@ def api_work_advance(request: Request, body: WorkAdvance):
     return {"progress": dict(get_stage_progress(body.prod_order_no) or {}), "total_qty": total}
 
 
+def _line_job(pro: str, stage: str) -> tuple[dict, float, list[str], int]:
+    """The line a step belongs to, the job's quantity on it, its steps in shop
+    order and where this one sits, or the reason there's no such job."""
+    line_id = _stage_line(stage)
+    if not line_id:
+        raise HTTPException(status_code=400, detail=f"stage must be one of {', '.join(ALL_STAGES)}")
+    line = LINES[line_id]
+    _, grouped = _pro_totals(line["dataset"])
+    g = grouped.get(pro)
+    if not g or not g["total_qty"]:
+        raise HTTPException(status_code=404, detail=f"{pro} isn't in the latest {line['label'].lower()} export.")
+    stages = list(line["stages"])
+    return line, g["total_qty"], stages, stages.index(stage)
+
+
+class WorkSet(BaseModel):
+    prod_order_no: str
+    stage: str
+    done: float = Field(ge=0)
+
+
+@app.post("/api/work/set")
+def api_work_set(request: Request, body: WorkSet):
+    """The phone's counter: set how many are done at a step. Steps before it
+    that are behind come up to match, as Done does; a later step that's already
+    further on has to be undone first."""
+    line, total, stages, idx = _line_job(body.prod_order_no, body.stage)
+    done = min(body.done, total)
+    existing = dict(get_stage_progress(body.prod_order_no) or {})
+    if idx + 1 < len(stages):
+        nxt = stages[idx + 1]
+        nxt_done = existing.get(f"{nxt}_done") or 0
+        if nxt_done > done:
+            raise HTTPException(status_code=400, detail=(
+                f"{line['labels'][nxt]} already has {_fmt_qty(nxt_done)} done, "
+                f"so {line['labels'][body.stage]} can't go below that. Undo {line['labels'][nxt]} first."))
+    who = actor(request)
+    for st in stages[:idx]:
+        if (existing.get(f"{st}_done") or 0) < done:
+            set_stage_progress(body.prod_order_no, st, done, who)
+            _stop_if_finished(body.prod_order_no, st, done, total)
+    set_stage_progress(body.prod_order_no, body.stage, done, who)
+    _stop_if_finished(body.prod_order_no, body.stage, done, total)
+    write_audit(who, "work.set", f"{body.prod_order_no} {body.stage} -> {_fmt_qty(done)}")
+    return {"progress": dict(get_stage_progress(body.prod_order_no) or {}), "total_qty": total}
+
+
+@app.post("/api/work/undo")
+def api_work_undo(request: Request, body: WorkIn):
+    """Take a step back to where it was before its last change. The tick log
+    says what that was: the latest rise that brought it to where it is now.
+    Undoing again goes back a change further."""
+    line, total, stages, idx = _line_job(body.prod_order_no, body.stage)
+    existing = dict(get_stage_progress(body.prod_order_no) or {})
+    current = existing.get(f"{body.stage}_done") or 0
+    label = line["labels"][body.stage]
+    rise = next((e for e in reversed(get_progress_events(prod_order_no=body.prod_order_no))
+                 if e["stage"] == body.stage and e["delta"] > 0 and abs(e["to_qty"] - current) < 1e-9), None)
+    if current <= 0 or rise is None:
+        raise HTTPException(status_code=400, detail=f"Nothing to undo on {label}.")
+    back = rise["from_qty"]
+    if idx + 1 < len(stages):
+        nxt = stages[idx + 1]
+        nxt_done = existing.get(f"{nxt}_done") or 0
+        if nxt_done > back:
+            raise HTTPException(status_code=400, detail=(
+                f"{line['labels'][nxt]} has {_fmt_qty(nxt_done)} done. Undo {line['labels'][nxt]} first."))
+    set_stage_progress(body.prod_order_no, body.stage, back, actor(request))
+    write_audit(actor(request), "work.undo", f"{body.prod_order_no} {body.stage} {_fmt_qty(current)} -> {_fmt_qty(back)}")
+    return {"progress": dict(get_stage_progress(body.prod_order_no) or {}), "total_qty": total}
+
+
 @app.post("/api/work/stop")
 def api_work_stop(request: Request, body: WorkIn):
     """Stop your own session; with none of your own, stop the job at that step

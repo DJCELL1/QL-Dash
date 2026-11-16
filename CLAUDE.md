@@ -245,10 +245,15 @@ progress tick completes it, on all three lines. Closed rows keep the start and
 end times for timing jobs later; nothing reports on them yet.
 
 The phone app (`/floor`, switching between Doors, Cavities and Powdercoat) has
-one button per step, **Done**, and no counts or Start/Pause: scan the job card,
-press Done on the step just finished. It calls `POST /api/work/advance` with
-`finish: true`, which completes that step and every earlier one in shop order
-(asking first when that skips any) and ends their sessions. So the phone only
+a **Done** button per step and no Start/Pause: scan the job card, press Done on
+the step just finished. A job of more than one unit also gets a − n / total +
+counter per step. Done and the counter both call `POST /api/work/set`, which
+sets the step's count, brings any earlier step that's behind up to match (the
+phone asks first) and refuses to go below what the next step already has.
+**Undo** (`POST /api/work/undo`) takes a step back to before its last change,
+found in the tick log as the latest rise that brought it to its current
+figure; pressed again it goes back another. It won't undo past the next
+step's count. So the phone only
 moves progress along; Start and Pause, and so "In production now", come from
 the Factory floor tab. `/api/work/active` also closes any session on a posted
 job (one gone from the latest export after being booked) each time it's read. Part quantities are entered only on the Factory floor tab, whose stage

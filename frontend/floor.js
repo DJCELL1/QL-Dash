@@ -274,11 +274,24 @@
     const complete = total > 0 && done >= total;
     const busy = state.busy.has(row.prod_order_no);
     const on = workOn(row.prod_order_no, stage.key);
-    const part = !complete && done > 0 ? `<span class="stage-count">${num(done)} / ${num(total)}</span>` : "";
+    // A job of more than one unit gets a counter, so the floor can tick them
+    // off as they go; a single unit is just Done. Undo shows wherever there's
+    // something to take back.
+    const multi = total > 1;
+    const dis = busy ? "disabled" : "";
+    const counter = multi
+      ? `<span class="counter">
+          <button type="button" class="step-btn" data-work="dec" ${busy || done <= 0 ? "disabled" : ""} aria-label="One less ${stage.label}">−</button>
+          <span class="counter-val"><b>${num(done)}</b> / ${num(total)}</span>
+          <button type="button" class="step-btn" data-work="inc" ${busy || complete ? "disabled" : ""} aria-label="One more ${stage.label}">+</button>
+        </span>`
+      : "";
+    const part = !multi && !complete && done > 0 ? `<span class="stage-count">${num(done)} / ${num(total)}</span>` : "";
+    const undo = done > 0 ? `<button type="button" class="work-btn is-undo" data-work="undo" ${dis}>↶ Undo</button>` : "";
 
-    const action = complete
+    const action = (complete
       ? '<span class="stage-done">✓ Done</span>'
-      : `<button type="button" class="work-btn is-done-btn" data-work="done" ${busy ? "disabled" : ""}>✓ Done</button>`;
+      : `<button type="button" class="work-btn is-done-btn" data-work="done" ${dis}>✓ Done</button>`) + undo;
     // Someone started it from the Factory floor tab: say who, so it isn't
     // doubled up.
     const who = on.length
@@ -291,6 +304,7 @@
         <span class="stage-name">${stage.label}</span>
         ${part}
       </div>
+      ${counter}
       <div class="work-row">${action}${who}</div>
     </div>`;
   }
@@ -307,32 +321,53 @@
       });
     });
 
-    document.querySelectorAll(".stage .work-btn").forEach((btn) => {
+    document.querySelectorAll(".stage [data-work]").forEach((btn) => {
       const el = btn.closest(".stage");
       const row = state.rows.find((r) => r.prod_order_no === el.dataset.pro);
       if (!row) return;
-      btn.addEventListener("click", () => markDone(row, el.dataset.stage));
+      btn.addEventListener("click", () => change(row, el.dataset.stage, btn.dataset.work));
     });
   }
 
-  async function markDone(row, stage) {
+  // Every change on the phone goes through here: Done (the whole step), the
+  // counter's + and - (one unit), and Undo (back to before the step's last
+  // change). Steps before this one that are behind come up to match, so ask
+  // first when that's what a tap would do.
+  async function change(row, stage, what) {
     const steps = stagesOf(row);
     const index = steps.findIndex((s) => s.key === stage);
     const total = row.total_qty || 0;
-    // Done on a step further on finishes the ones before it too; say so.
-    const skipped = steps.slice(0, index).filter((s) => doneFor(row, s.key) < total);
-    if (skipped.length &&
-        !confirm(`Marking ${steps[index].label} done also marks ${skipped.map((s) => s.label).join(" and ")} done. Carry on?`)) return;
+    const label = STAGE_LABELS[stage] || stage;
+    const done = doneFor(row, stage);
+
+    let url, payload, message;
+    if (what === "undo") {
+      url = "/api/work/undo";
+      payload = { prod_order_no: row.prod_order_no, stage };
+      message = `${label} undone`;
+    } else {
+      const target = what === "done" ? total : what === "inc" ? Math.min(total, done + 1) : Math.max(0, done - 1);
+      const behind = steps.slice(0, index).filter((s) => doneFor(row, s.key) < target);
+      if (behind.length) {
+        const ask = what === "done"
+          ? `Marking ${label} done also marks ${behind.map((s) => s.label).join(" and ")} done. Carry on?`
+          : `That brings ${behind.map((s) => s.label).join(" and ")} up to ${num(target)} as well. Carry on?`;
+        if (!confirm(ask)) return;
+      }
+      url = "/api/work/set";
+      payload = { prod_order_no: row.prod_order_no, stage, done: target };
+      message = what === "done" ? `${label} done` : `${label} ${num(target)} of ${num(total)}`;
+    }
 
     const key = row.prod_order_no;
     if (state.busy.has(key)) return;
     state.busy.add(key);
     render();
     try {
-      const res = await fetch("/api/work/advance", {
+      const res = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prod_order_no: row.prod_order_no, stage, finish: true }),
+        body: JSON.stringify(payload),
       });
       const body = await res.json().catch(() => ({}));
       if (res.status === 401) {
@@ -344,13 +379,11 @@
       for (const s of steps) {
         if (body.progress && body.progress[`${s.key}_done`] != null) row[`${s.key}_done`] = body.progress[`${s.key}_done`];
       }
-      const sum = steps.reduce((t, s) => t + doneFor(row, s.key), 0);
+      const sum = steps.reduce((t, s) => t + Math.min(doneFor(row, s.key), total), 0);
       row.pct_complete = total > 0 ? Math.round((sum / (total * steps.length)) * 1000) / 10 : 0;
       row.status = total > 0 && doneFor(row, steps[steps.length - 1].key) >= total ? "completed" : "in_production";
       await refreshWork();
-
-      const label = STAGE_LABELS[stage] || stage;
-      toast(`${row.prod_order_no} · ${label} done`, "good");
+      toast(`${row.prod_order_no} · ${message}`, "good");
     } catch (err) {
       toast(err.message, "bad");
     } finally {
