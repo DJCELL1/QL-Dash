@@ -92,7 +92,6 @@
     ]);
     state.rows = data.rows || [];
     state.work = work.sessions || [];
-    state.paused = work.paused || [];
     const key = todayKey();
     // Powdercoat jobs carry their day on the job itself; doors and cavities
     // are booked in the schedule.
@@ -103,15 +102,10 @@
     );
   }
 
-  function pausedOn(pro, stage) {
-    return (state.paused || []).find((s) => s.prod_order_no === pro && s.stage === stage) || null;
-  }
-
   async function refreshWork() {
     const w = await getJSON("/api/work/active").catch(() => null);
     if (w) {
       state.work = w.sessions || [];
-      state.paused = w.paused || [];
     }
   }
 
@@ -269,9 +263,10 @@
     </span>`;
   }
 
-  // One button per step. Start on a step finishes every step before it, so the
-  // job moves along as the floor does; the last step, once started, finishes
-  // the job. Part quantities are kept to the dashboard's Factory floor tab.
+  // One button per step: Done. Scan the job card, press Done on the step you've
+  // just finished, and the job moves along; any step before it that wasn't
+  // ticked is finished with it. Part quantities, and Start/Pause, are kept to
+  // the dashboard's Factory floor tab.
   function stageHTML(row, stage, index) {
     const steps = stagesOf(row);
     const total = row.total_qty || 0;
@@ -281,28 +276,14 @@
     const on = workOn(row.prod_order_no, stage.key);
     const part = !complete && done > 0 ? `<span class="stage-count">${num(done)} / ${num(total)}</span>` : "";
 
-    // Start, then Pause while you're on it, Resume to carry on. There's no
-    // Finish: the last step is done when it's ticked complete on the Factory
-    // floor tab or BC posts the job.
-    const mine = on.some(isMine);
-    const paused = !on.length ? pausedOn(row.prod_order_no, stage.key) : null;
-    const btn = (work, text, cls) =>
-      `<button type="button" class="work-btn ${cls || ""}" data-work="${work}" ${busy ? "disabled" : ""}>${text}</button>`;
-    let action;
-    if (complete) {
-      action = '<span class="stage-done">✓ Done</span>';
-    } else if (on.length) {
-      action = mine ? btn("pause", "⏸ Pause", "is-pause") : "";
-    } else if (paused) {
-      action = btn("start", "▶ Resume");
-    } else {
-      action = btn("start", "▶ Start");
-    }
+    const action = complete
+      ? '<span class="stage-done">✓ Done</span>'
+      : `<button type="button" class="work-btn is-done-btn" data-work="done" ${busy ? "disabled" : ""}>✓ Done</button>`;
+    // Someone started it from the Factory floor tab: say who, so it isn't
+    // doubled up.
     const who = on.length
       ? `<span class="work-who">▶ ${esc(on.map((s) => (isMine(s) ? "You" : s.username)).join(", "))} since ${esc(clockOf(on[0].started_at))}</span>`
-      : paused
-        ? `<span class="work-who is-paused">⏸ Paused by ${esc(isMine(paused) ? "you" : paused.username)} at ${esc(clockOf(paused.ended_at))}</span>`
-        : "";
+      : "";
 
     return `<div class="stage ${complete ? "is-complete" : ""} ${on.length ? "is-working" : ""}"
                  data-pro="${esc(row.prod_order_no)}" data-stage="${stage.key}">
@@ -330,19 +311,18 @@
       const el = btn.closest(".stage");
       const row = state.rows.find((r) => r.prod_order_no === el.dataset.pro);
       if (!row) return;
-      btn.addEventListener("click", () =>
-        btn.dataset.work === "pause" ? pause(row, el.dataset.stage) : advance(row, el.dataset.stage, btn.dataset.work === "finish"));
+      btn.addEventListener("click", () => markDone(row, el.dataset.stage));
     });
   }
 
-  async function advance(row, stage, finish) {
+  async function markDone(row, stage) {
     const steps = stagesOf(row);
     const index = steps.findIndex((s) => s.key === stage);
     const total = row.total_qty || 0;
-    // Starting further on than the next step finishes more than one; say so.
+    // Done on a step further on finishes the ones before it too; say so.
     const skipped = steps.slice(0, index).filter((s) => doneFor(row, s.key) < total);
-    if (!finish && skipped.length > 1 &&
-        !confirm(`Starting ${steps[index].label} marks ${skipped.map((s) => s.label).join(" and ")} as done. Carry on?`)) return;
+    if (skipped.length &&
+        !confirm(`Marking ${steps[index].label} done also marks ${skipped.map((s) => s.label).join(" and ")} done. Carry on?`)) return;
 
     const key = row.prod_order_no;
     if (state.busy.has(key)) return;
@@ -352,7 +332,7 @@
       const res = await fetch("/api/work/advance", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prod_order_no: row.prod_order_no, stage, finish }),
+        body: JSON.stringify({ prod_order_no: row.prod_order_no, stage, finish: true }),
       });
       const body = await res.json().catch(() => ({}));
       if (res.status === 401) {
@@ -370,34 +350,7 @@
       await refreshWork();
 
       const label = STAGE_LABELS[stage] || stage;
-      toast(`${row.prod_order_no} · ${finish ? `${label} finished` : `${label} started`}`, "good");
-    } catch (err) {
-      toast(err.message, "bad");
-    } finally {
-      state.busy.delete(key);
-      render();
-    }
-  }
-
-  async function pause(row, stage) {
-    const key = row.prod_order_no;
-    if (state.busy.has(key)) return;
-    state.busy.add(key);
-    render();
-    try {
-      const res = await fetch("/api/work/pause", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prod_order_no: row.prod_order_no, stage }),
-      });
-      const body = await res.json().catch(() => ({}));
-      if (res.status === 401) {
-        openSignIn();
-        throw new Error("Sign in first, so we know who's on it.");
-      }
-      if (!res.ok) throw new Error(body.detail || "Couldn't save that.");
-      await refreshWork();
-      toast(`${row.prod_order_no} · ${STAGE_LABELS[stage] || stage} paused`, "good");
+      toast(`${row.prod_order_no} · ${label} done`, "good");
     } catch (err) {
       toast(err.message, "bad");
     } finally {

@@ -245,17 +245,18 @@ progress tick completes it, on all three lines. Closed rows keep the start and
 end times for timing jobs later; nothing reports on them yet.
 
 The phone app (`/floor`, switching between Doors, Cavities and Powdercoat) has
-one button per step and no counts. Start calls `POST /api/work/advance`, which
-completes every earlier step of that job in shop order (ending their sessions)
-and starts this one. There is no Finish: the last step is completed on the
-Factory floor tab, or ends when BC posts the job - `/api/work/active` closes
-any session on a posted job (one gone from the latest export after being
-booked) each time it's read. Part quantities are entered only on the Factory floor tab, whose stage
+one button per step, **Done**, and no counts or Start/Pause: scan the job card,
+press Done on the step just finished. It calls `POST /api/work/advance` with
+`finish: true`, which completes that step and every earlier one in shop order
+(asking first when that skips any) and ends their sessions. So the phone only
+moves progress along; Start and Pause, and so "In production now", come from
+the Factory floor tab. `/api/work/active` also closes any session on a posted
+job (one gone from the latest export after being booked) each time it's read. Part quantities are entered only on the Factory floor tab, whose stage
 cells keep their number boxes.
 
 Once you're on a step, its button is Pause (`POST /api/work/pause`, ending your
 session with reason `paused`), and a paused step shows Resume, which is Start
-again; this is on the phone and the Factory floor tab, and there is no Stop. A
+again; this is on the Factory floor tab, and there is no Stop. A
 step is paused while its latest session ended with Pause (`get_paused_work()`,
 served as `paused` by `/api/work/active`); completing the step marks those
 `paused, then finished`, so nothing finished shows as paused. Paused jobs show
