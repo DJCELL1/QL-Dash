@@ -116,12 +116,15 @@ ticks logged under Build and Components were left as they were.
 
 ## The door board: one card per job
 
-Cavities work the same way through the same code (`buildPieceCells()`), booked
-by Prep alone; `_fold_cavity_bookings()` folded their old Make bookings once
-(flag `cavity_bookings_folded`).
+Cavities don't work this way. They book Prep and Make separately
+(`buildCavityCells()`), one card per step on whatever day each is dragged to;
+a Make that hasn't been dragged follows its Prep's day as a dashed card. (They
+were briefly one card per job; `_fold_cavity_bookings()` folded old Make
+bookings into Prep once then, flag `cavity_bookings_folded`, so Make bookings
+from before that are gone.)
 
 A door job is booked onto a day by Picking alone (`SCHEDULABLE_STAGES` takes
-only the first door stage and the first cavity stage). `buildScheduleCells()` then lays its doors down
+only the first door stage, and both cavity steps). `buildScheduleCells()` then lays its doors down
 that day by how far each has got: still to pick in Picking, picked in
 Machining, machined in Build/Wrap, and finished doors stay in Build/Wrap,
 ticked. Each door shows once. A job split across days fills its earliest day
@@ -244,8 +247,10 @@ end times for timing jobs later; nothing reports on them yet.
 The phone app (`/floor`, switching between Doors, Cavities and Powdercoat) has
 one button per step and no counts. Start calls `POST /api/work/advance`, which
 completes every earlier step of that job in shop order (ending their sessions)
-and starts this one; the last step, once started, shows Finish, which completes
-it too. Part quantities are entered only on the Factory floor tab, whose stage
+and starts this one. There is no Finish: the last step is completed on the
+Factory floor tab, or ends when BC posts the job - `/api/work/active` closes
+any session on a posted job (one gone from the latest export after being
+booked) each time it's read. Part quantities are entered only on the Factory floor tab, whose stage
 cells keep their number boxes.
 
 Once you're on a step, its button is Pause (`POST /api/work/pause`, ending your
@@ -364,8 +369,8 @@ attribute. Both overlays carry an explicit `[hidden] { display: none; }`.
 ## Auto-scheduling
 
 Two endpoints, both placing only the **first** step of a line. On the door
-board that booking is the whole job's day; on the cavities board Make follows
-Prep.
+board that booking is the whole job's day; on the cavities board it places
+Prep, and Make follows it until dragged.
 
 `POST /api/schedule/auto` takes a line, a date range and `replan`. Candidates
 are whatever still has quantity left to schedule, soonest due date first, each
