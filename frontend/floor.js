@@ -279,11 +279,11 @@
     const complete = total > 0 && done >= total;
     const busy = state.busy.has(row.prod_order_no);
     const on = workOn(row.prod_order_no, stage.key);
-    const last = index === steps.length - 1;
     const part = !complete && done > 0 ? `<span class="stage-count">${num(done)} / ${num(total)}</span>` : "";
 
-    // Start, then Pause while you're on it, Resume to carry on. The last step
-    // also has Finish once it's going.
+    // Start, then Pause while you're on it, Resume to carry on. There's no
+    // Finish: the last step is done when it's ticked complete on the Factory
+    // floor tab or BC posts the job.
     const mine = on.some(isMine);
     const paused = !on.length ? pausedOn(row.prod_order_no, stage.key) : null;
     const btn = (work, text, cls) =>
@@ -292,7 +292,7 @@
     if (complete) {
       action = '<span class="stage-done">✓ Done</span>';
     } else if (on.length) {
-      action = (mine ? btn("pause", "⏸ Pause", "is-pause") : "") + (last ? btn("finish", "■ Finish", "is-finish") : "");
+      action = mine ? btn("pause", "⏸ Pause", "is-pause") : "";
     } else if (paused) {
       action = btn("start", "▶ Resume");
     } else {

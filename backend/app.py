@@ -1296,7 +1296,8 @@ def api_factory_reset(request: Request, body: FactoryReset):
 # different PRO numbers, so a stage decides which one to look the order up in.
 # A door job is booked onto a day by its first stage alone; the later stages
 # run on that same day, so they're never booked in their own right.
-SCHEDULABLE_STAGES = (STAGES[0], CAVITY_STAGES[0])
+# Cavities book Prep and Make each on its own day.
+SCHEDULABLE_STAGES = (STAGES[0],) + CAVITY_STAGES
 
 
 def _grouped_for_stage(stage: str) -> dict:
@@ -1827,10 +1828,20 @@ class WorkIn(BaseModel):
 @app.get("/api/work/active")
 def api_work_active():
     """Everything someone has started and not finished or stopped."""
+    # With no Finish on the phone, a last step can still be running when BC
+    # posts the job; a posted job isn't being worked on, so that ends it.
+    posted = set()
+    for line in LINES.values():
+        _, grouped = _pro_totals(line["dataset"])
+        posted |= {pro for pro, g in grouped.items() if g.get("posted")}
     sessions = []
     for s in get_open_work():
+        if s["prod_order_no"] in posted:
+            end_work(s["prod_order_no"], s["stage"], "complete")
+            continue
         sessions.append({**s, "line": _stage_line(s["stage"]), "label": _stage_label(s["stage"])})
-    paused = [{**s, "line": _stage_line(s["stage"]), "label": _stage_label(s["stage"])} for s in get_paused_work()]
+    paused = [{**s, "line": _stage_line(s["stage"]), "label": _stage_label(s["stage"])}
+              for s in get_paused_work() if s["prod_order_no"] not in posted]
     return {"sessions": sessions, "paused": paused}
 
 
@@ -2697,11 +2708,17 @@ def api_efficiency(date_from: str, date_to: str):
         the_date = e["scheduled_date"]
         if the_date == HOLDING_DATE or not (date_from <= the_date <= date_to):
             continue
-        # a booking is every stage of that line's job, on that day
-        line = LINES.get(_stage_line(e["stage"]))
-        if not line or e["stage"] != line["stages"][0]:
+        # a door booking is every door stage on that day; a cavity booking is
+        # just its own step
+        line_id = _stage_line(e["stage"])
+        if line_id == "doors":
+            if e["stage"] != STAGES[0]:
+                continue
+            stages = STAGES
+        elif line_id == "cavities":
+            stages = (e["stage"],)
+        else:
             continue
-        stages = line["stages"]
         for st in stages:
             m = mins_for(e["prod_order_no"], st)
             if m:

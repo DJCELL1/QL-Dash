@@ -4917,8 +4917,8 @@
     const idx = stages.indexOf(stage);
     if (idx <= 0) return null;
     const prev = stages[idx - 1];
-    // Door and cavity steps share their day by design, so there's nothing to flag.
-    if (FACTORY_STAGES.includes(stage) || CAV_STAGES.includes(stage)) return { prev };
+    // Door stages share their day by design, so there's nothing to flag.
+    if (FACTORY_STAGES.includes(stage)) return { prev };
     const entries = state.schedule.entries.filter((e) => e.prod_order_no === pro && e.stage === prev);
     if (!entries.length) return { icon: "⚠", why: `${stageLabel(prev)} isn't scheduled at all`, prev };
     const earliest = entries.map((e) => e.scheduled_date).sort()[0];
@@ -4935,8 +4935,7 @@
   // Blocks for one area: sales orders end to end, in board order.
   function ganttRow(stage, dKey) {
     // A door job is booked as Picking and runs every stage on that day.
-    const booking = FACTORY_STAGES.includes(stage) ? FACTORY_STAGES[0]
-      : CAV_STAGES.includes(stage) ? CAV_STAGES[0] : stage;
+    const booking = FACTORY_STAGES.includes(stage) ? FACTORY_STAGES[0] : stage;
     const entries = state.schedule.entries
       .filter((e) => e.stage === booking && e.scheduled_date === dKey)
       .sort((a, b) => (a.sequence - b.sequence) || String(a.sales_order_no).localeCompare(String(b.sales_order_no)));
@@ -6801,25 +6800,95 @@
     return state.schedule.entries.filter((e) => CAV_STAGES.includes(e.stage));
   }
 
-  // One card per job, as on the door board: booked by Prep, its units sit down
-  // the day in Prep or Make by how far each has got.
+  // Prep and Make are booked separately: each job shows once in Prep and once
+  // in Make, on whichever days they're dragged to. A Make nobody has dragged
+  // yet follows its Prep's day as a dashed card, and a Prep parked in Holding
+  // takes its undragged Make with it.
   function buildCavityCells(rows) {
-    return buildPieceCells(rows, {
-      firstStage: CAV_STAGES[0],
-      stagesOf: () => CAV_STAGES,
-      entries: cavEntries(),
-      customerOf: (row) => customerLabel(row.source_name),
-    });
+    const map = new Map();
+    const push = (dKey, stage, card) => {
+      // A posted job keeps its place on the days it was planned and worked,
+      // but has no business in Holding, which is a list of work still to do.
+      if (card.posted && dKey === HOLDING_DATE) return;
+      const key = dKey + "|" + stage;
+      if (!map.has(key)) map.set(key, []);
+      map.get(key).push(Object.assign({ dKey }, card));
+    };
+
+    const byProStage = new Map();
+    for (const e of cavEntries()) {
+      const k = e.prod_order_no + "|" + e.stage;
+      if (!byProStage.has(k)) byProStage.set(k, []);
+      byProStage.get(k).push(e);
+    }
+
+    for (const row of rows) {
+      const pro = row.prod_order_no;
+      let prevDateKey = null;
+
+      for (const stage of CAV_STAGES) {
+        const total = row.total_qty || 0;
+        const done = Math.min(row[stage + "_done"] || 0, total);
+        const stageComplete = total > 0 && done >= total;
+        const frac = total > 0 ? done / total : 0;
+
+        const explicit = byProStage.get(pro + "|" + stage) || [];
+        const explicitSum = explicit.reduce((a, e) => a + e.qty, 0);
+        const explicitDated = explicit.filter((e) => e.scheduled_date !== HOLDING_DATE);
+        const explicitHeld = explicit.length > 0 && explicitDated.length === 0;
+        const earliestDated = explicitDated.length
+          ? explicitDated.reduce((min, e) => (e.scheduled_date < min ? e.scheduled_date : min), explicitDated[0].scheduled_date)
+          : null;
+
+        const base = {
+          pro,
+          so: row.sales_order_no,
+          stage,
+          bookStage: stage,
+          customer: customerLabel(row.source_name),
+          wm: row.wm_number || null,
+          posted: !!row.posted,
+          item: row.item_summary,
+          due: row.due_date,
+          chunks: explicit.length,
+          stageDone: done,
+          stageTotal: total,
+          stageComplete,
+        };
+
+        // A card's fill is how far that whole step is through, as before.
+        for (const e of explicit) {
+          push(e.scheduled_date, stage, Object.assign({}, base, {
+            qty: e.qty, chunkQty: e.qty, pieceDone: e.qty * frac, entryId: e.id, confirmed: true,
+          }));
+        }
+
+        let stageDateKey;
+        if (explicitDated.length > 0) stageDateKey = earliestDated;
+        else if (explicitHeld) stageDateKey = HOLDING_DATE;
+        else if (stage === CAV_STAGES[0]) stageDateKey = HOLDING_DATE;
+        else if (prevDateKey && prevDateKey !== HOLDING_DATE) stageDateKey = prevDateKey;
+        else stageDateKey = HOLDING_DATE;
+        prevDateKey = stageDateKey;
+
+        const leftover = Math.max(0, total - done - explicitSum);
+        const uncommitted = Math.max(0, total - explicitSum);
+        const qty = leftover > 0.001 ? leftover : stageComplete ? uncommitted : 0;
+        if (qty > 0.001) {
+          push(stageDateKey, stage, Object.assign({}, base, {
+            qty, chunkQty: qty, pieceDone: qty * frac, entryId: null, confirmed: false,
+          }));
+        }
+      }
+    }
+    return map;
   }
 
   const CAV_TAG_LETTER = { cav_prep: "P", cav_make: "M" };
 
-  const CAV_VERBS = { cav_prep: "to prep", cav_make: "to make" };
-
   function cavCardHTML(c) {
-    const p = pieceProgress(c);
-    const pct = p.pct;
-    const done = p.total > 0 && pct >= 1;
+    const pct = c.stageTotal > 0 ? c.stageDone / c.stageTotal : 0;
+    const done = !!c.stageComplete;
     const behind = !done && !c.posted && c.dKey && c.dKey !== HOLDING_DATE && c.dKey < dateKey(new Date());
     const cls = "schedule-card " + (c.confirmed ? "" : "is-suggested") + (done ? " is-stage-done" : "") +
       (behind ? " is-card-behind" : "");
@@ -6829,19 +6898,20 @@
         '<button class="sc-btn" type="button" data-cav-action="remove" title="Unschedule">×</button>' +
         "</span>"
       : "";
+    const label = CAV_LABELS[c.stage].toLowerCase();
     const progressText = done
-      ? ' · <span class="sc-done">✓ finished</span>'
-      : p.done > 0
-        ? " · " + fmtNum(p.done) + "/" + fmtNum(p.total) + " finished"
-        : " · " + CAV_VERBS[c.stage];
+      ? ' · <span class="sc-done">✓ ' + label + " done</span>"
+      : c.stageTotal > 0
+        ? " · " + fmtNum(c.stageDone) + "/" + fmtNum(c.stageTotal) + " " + label
+        : "";
     return '<div class="' + cls + '"' + progressFillStyle(pct) +
       ' draggable="true" data-cav="1" data-pro="' + c.pro + '" data-stage="' + c.stage +
       '" data-book-stage="' + (c.bookStage || c.stage) + '" data-day="' + (c.dKey || "") +
       '" data-qty="' + c.qty + '" data-chunk-qty="' + (c.chunkQty == null ? c.qty : c.chunkQty) +
       '" data-entry-id="' + (c.entryId == null ? "" : c.entryId) +
       '" data-confirmed="' + c.confirmed + '"' +
-      ' title="' + CAV_LABELS[c.stage] + " — " + fmtNum(c.qty) + " here" +
-      (p.done ? ", " + fmtNum(p.done) + " finished" : "") + " — " + escapeAttr(c.item || "") + '">' +
+      ' title="' + CAV_LABELS[c.stage] + " — " + fmtNum(c.stageDone) + " of " + fmtNum(c.stageTotal) +
+      " done — " + escapeAttr(c.item || "") + '">' +
       actions +
       '<span class="stage-dot" title="' + CAV_LABELS[c.stage] + '">' + CAV_TAG_LETTER[c.stage] + "</span>" +
       '<span class="sc-pro">' + c.pro + "</span>" +
@@ -6963,7 +7033,7 @@
           const units = cards.reduce((s, c) => s + c.qty, 0);
           return '<div class="schedule-stage-section">' +
             '<div class="schedule-stage-label">' + CAV_LABELS[st] + (cards.length ? " — " + fmtNum(units) : "") + "</div>" +
-            '<div class="schedule-dropzone cav-dropzone" data-date="' + dKey + '" data-stages="' + CAV_STAGES.join(",") + '">' +
+            '<div class="schedule-dropzone cav-dropzone" data-date="' + dKey + '" data-stages="' + st + '">' +
             cavCardsHTML(cards, dKey, st) + "</div></div>";
         }).join("");
         return '<div class="schedule-day ' + (dKey === todayK ? "is-today" : "") + '">' +
