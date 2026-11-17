@@ -2667,6 +2667,21 @@
     return `<span class="cell-muted">${dateText}</span>`;
   }
 
+  // The item, and on the powdercoat line the colour it's getting: the swatch
+  // and name the powdercoat schedule shows, so the floor can see it at a glance.
+  function floorItemHTML(r) {
+    const item = escapeAttr(r.item_summary || "—");
+    if (floorLine().id !== "powdercoat") return item;
+    const job = ((state.data.subBoard && state.data.subBoard.jobs) || []).find((j) => j.prod_order_no === r.prod_order_no);
+    if (!job) return item;
+    const hex = job.colour && job.colour.hex;
+    const detail = pcsColourDetail(job);
+    return `<div class="floor-colour">
+        <span class="floor-swatch${hex ? "" : " is-unknown"}"${hex ? ` style="background:${hex}"` : ""}>${hex ? "" : "?"}</span>
+        <span class="floor-colour-text"><b>${escapeAttr(pcsColourName(job))}</b>${detail && job.colour ? `<span class="cell-muted">${escapeAttr(detail)}</span>` : ""}</span>
+      </div>${item}`;
+  }
+
   function stageCellHTML(stage, r) {
     const done = r[`${stage}_done`] || 0;
     const total = r.total_qty;
@@ -2992,7 +3007,7 @@
                 <td class="col-rank">${i + 1}</td>
                 <td><div class="cell-primary">${r.prod_order_no}</div><div class="cell-muted">${soLabel(r.sales_order_no)}</div></td>
                 <td>${customerLabel(r.source_name)}</td>
-                <td>${r.item_summary || "—"}</td>
+                <td>${floorItemHTML(r)}</td>
                 <td>${factoryDueCell(r)}</td>
                 <td class="cell-num"><strong>${fmtNum(qty)}</strong></td>
                 <td>${stageCellHTML(stage, r)}</td>
@@ -3109,7 +3124,7 @@
           <td class="col-pick"><input type="checkbox" class="factory-pick" data-pro="${r.prod_order_no}" ${picked ? "checked" : ""}></td>
           <td class="col-pro"><div class="cell-primary">${r.prod_order_no} ${showBadge ? '<span class="completed-badge">✓ Done</span>' : ""}</div><div class="cell-muted">${r.sales_order_no || ""}</div></td>
           <td class="col-customer">${customerLabel(r.source_name)}</td>
-          <td class="col-item">${r.item_summary || "—"}</td>
+          <td class="col-item">${floorItemHTML(r)}</td>
           <td class="col-due" data-label="Due">${factoryDueCell(r)}</td>
           <td class="cell-num col-qty" data-label="${capitalize(line.unit[1])}">${fmtNum(r.total_qty)}</td>
           ${stageCols.map((s) => stagesOfRow(r).includes(s)
