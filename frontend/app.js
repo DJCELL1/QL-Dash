@@ -6781,7 +6781,24 @@
           ${customer ? `<b class="now-customer">${escapeAttr(customer)}</b> · ` : ""}<b>${escapeAttr(p.prod_order_no)}</b> ${escapeAttr(stageLabel(p.stage))} · paused by ${escapeAttr(p.username)} · ${clockOf(p.ended_at)}</span>`;
       })
       .join("");
-    el.innerHTML = `<span class="now-label">In production now</span>${chips || '<span class="now-empty">Nothing started</span>'}${pausedChips}`;
+    const clear = chips || pausedChips
+      ? `<button type="button" class="now-clear" title="Take everything off this list. Times already recorded are kept.">Clear</button>`
+      : "";
+    el.innerHTML = `<span class="now-label">In production now</span>${chips || '<span class="now-empty">Nothing started</span>'}${pausedChips}${clear}`;
+    const btn = el.querySelector(".now-clear");
+    if (btn) {
+      btn.onclick = async () => {
+        if (!confirm("Clear everything from In production now for this line? Anyone still working will need to press Start again.")) return;
+        try {
+          await postJSON("/api/work/clear", { line: lineId });
+        } catch (e) {
+          if (!e.needsSignIn) notifyError(e, "Couldn't clear that.");
+          return;
+        }
+        await loadWork();
+        render();
+      };
+    }
   }
 
   async function loadCavities() {

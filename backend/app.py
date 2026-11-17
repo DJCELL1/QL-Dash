@@ -68,6 +68,7 @@ from db import (
     count_users,
     delete_powder_colour,
     delete_user,
+    clear_work,
     end_work,
     get_open_work,
     get_paused_work,
@@ -1843,6 +1844,22 @@ def api_work_active():
     paused = [{**s, "line": _stage_line(s["stage"]), "label": _stage_label(s["stage"])}
               for s in get_paused_work() if s["prod_order_no"] not in posted]
     return {"sessions": sessions, "paused": paused}
+
+
+class WorkClear(BaseModel):
+    line: str
+
+
+@app.post("/api/work/clear")
+def api_work_clear(request: Request, body: WorkClear):
+    """Reset a line's "In production now": nobody is shown as on anything."""
+    require_admin(request, "Clearing In production now")
+    line = LINES.get(body.line)
+    if not line:
+        raise HTTPException(status_code=400, detail=f"line must be one of {', '.join(LINES)}")
+    n = clear_work(tuple(line["stages"]))
+    write_audit(actor(request), "work.clear", f"{body.line} ({n})")
+    return {"cleared": n}
 
 
 @app.post("/api/work/pause")

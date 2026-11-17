@@ -827,6 +827,25 @@ def end_work(prod_order_no: str, stage: str, reason: str, username: str | None =
         return n
 
 
+def clear_work(stages: tuple[str, ...]) -> int:
+    """Empty "In production now" for these steps: end every open session and
+    stop every paused one showing as paused. The times already recorded stay."""
+    from datetime import datetime, timezone
+
+    now = datetime.now(timezone.utc).isoformat()
+    marks = ", ".join("?" for _ in stages)
+    with get_conn() as conn:
+        n = conn.execute(
+            f"UPDATE work_sessions SET ended_at = ?, ended_reason = 'cleared' "
+            f"WHERE ended_at IS NULL AND stage IN ({marks})", (now, *stages),
+        ).rowcount
+        n += conn.execute(
+            f"UPDATE work_sessions SET ended_reason = 'paused, then cleared' "
+            f"WHERE ended_reason = 'paused' AND stage IN ({marks})", stages,
+        ).rowcount
+        return n
+
+
 def get_paused_work() -> list[dict]:
     """Steps whose most recent session was paused and nobody has picked back
     up: the latest session on that job and step ended with Pause."""

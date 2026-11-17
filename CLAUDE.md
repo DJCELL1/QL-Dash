@@ -265,7 +265,10 @@ again; this is on the Factory floor tab, and there is no Stop. A
 step is paused while its latest session ended with Pause (`get_paused_work()`,
 served as `paused` by `/api/work/active`); completing the step marks those
 `paused, then finished`, so nothing finished shows as paused. Paused jobs show
-greyed in the "In production now" strip. A started job carries a green ▶ badge on its schedule card, and each
+greyed in the "In production now" strip. Each strip has a Clear button (admins
+only, `POST /api/work/clear` with a `line`) that ends every open session on that
+line's steps and marks its paused ones `paused, then cleared`; recorded times
+stay. A started job carries a green ▶ badge on its schedule card, and each
 board and the Factory floor tab has an "In production now" strip.
 
 ## Settings
