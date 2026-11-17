@@ -2009,6 +2009,27 @@
       .join("");
   }
 
+  // The powdercoat schedule as day cells, keyed "<day>|<step>" like the door
+  // and cavity boards, for the Factory floor's By day view.
+  function buildPowdercoatCells() {
+    const map = new Map();
+    for (const j of (state.data.subBoard && state.data.subBoard.jobs) || []) {
+      const dKey = (j.scheduled_date || "").slice(0, 10);
+      if (!dKey) continue;
+      for (const p of pcsPieces(j)) {
+        const key = `${dKey}|${p.pcStage}`;
+        if (!map.has(key)) map.set(key, []);
+        map.get(key).push({
+          pro: j.prod_order_no,
+          qty: p.remaining_qty,
+          stageComplete: p.pieceDone >= p.remaining_qty - 0.001,
+          posted: false,
+        });
+      }
+    }
+    return map;
+  }
+
   // Holding is the work still to plan: anything not on a day and not finished.
   const pcsHeld = (jobs) => jobs.filter((j) => !j.scheduled_date && !pcsFinished(j));
 
@@ -2884,12 +2905,6 @@
         if (state.filters.factory.line === btn.dataset.line) return;
         state.filters.factory.line = btn.dataset.line;
         localStorage.setItem("factoryLine", btn.dataset.line);
-        // Nothing schedules powdercoating onto days, so By day would be a row
-        // of empty buckets. Land on the list that actually has the work in it.
-        if (btn.dataset.line === "powdercoat" && state.filters.factory.viewMode === "day") {
-          state.filters.factory.viewMode = "all";
-          localStorage.setItem("factoryViewMode", "all");
-        }
         // Ticks don't carry across lines: a job picked on Doors is out of sight
         // on Cavities, and Reset shouldn't clear work nobody can see selected.
         state.selectedPros.clear();
@@ -2940,12 +2955,11 @@
     // a day — which is most of the later stages, since they follow a dated Cut
     // to size rather than being booked in their own right.
     //
-    // Powdercoating has no scheduling board of its own, so there are no cards
-    // to place: its day view stays empty and All jobs is the useful one, which
-    // is where the line toggle sends you.
+    // Powdercoating reads the same days its own schedule does: each job on the
+    // day it was dragged to, its units in the step the floor has reached.
     const cardsByCell =
       line.id === "cavities" ? buildCavityCells(allRows)
-      : line.id === "powdercoat" ? new Map()
+      : line.id === "powdercoat" ? buildPowdercoatCells()
       : buildScheduleCells(allRows);
 
     function cardsForDay(stage) {

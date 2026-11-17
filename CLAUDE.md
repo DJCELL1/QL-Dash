@@ -164,8 +164,10 @@ its own endpoint pair and its own columns in `stage_progress`:
 ordering rule: a step can't run ahead of the one before it or drop below the
 one after it.
 
-Only doors have a scheduling board, so the floor's "By day" view is empty for
-powdercoating - picking that line switches to "All jobs" for that reason. On
+The floor's "By day" view reads each line's own schedule: the door and cavity
+boards, and for powdercoating `buildPowdercoatCells()`, which lays each job on
+its `scheduled_date` with its units in the step the floor has reached
+(`pcsPieces()`). Unfinished work from earlier days rolls into today. On
 the powdercoat line the Item column also shows each job's powder colour
 (`floorItemHTML()`), swatch, name and code, read from the powdercoat board's
 jobs (`state.data.subBoard`). The phone app does the same on its powdercoat
