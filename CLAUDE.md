@@ -168,7 +168,10 @@ Only doors have a scheduling board, so the floor's "By day" view is empty for
 powdercoating - picking that line switches to "All jobs" for that reason. On
 the powdercoat line the Item column also shows each job's powder colour
 (`floorItemHTML()`), swatch, name and code, read from the powdercoat board's
-jobs (`state.data.subBoard`).
+jobs (`state.data.subBoard`). The phone app does the same on its powdercoat
+line (`colourHTML()` / `colourStripe()` in `floor.js`, from
+`/api/subcontractors`): a swatch, name and code on each job card and a stripe
+of the colour down the card's left edge.
 
 Note that powdercoat jobs are measured in both EA and LTHS. Per-row totals are
 right, but the floor's aggregate "items" tile sums the two together, which the

@@ -595,3 +595,22 @@ body.is-readonly .stage-controls { opacity: 0.5; pointer-events: none; }
 .counter-val { font-size: 1.15rem; min-width: 4.5rem; text-align: center; }
 .counter-val b { font-size: 1.5rem; }
 .work-btn.is-undo { background: transparent; color: var(--ink-2); }
+
+/* The powder colour on a powdercoat job card. */
+.job-colour { display: flex; align-items: center; gap: 0.6rem; margin-top: 0.35rem; text-align: left; }
+.job-swatch {
+  flex-shrink: 0;
+  width: 2.4rem;
+  height: 2.4rem;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  color: var(--ink-3);
+}
+.job-swatch.is-unknown { background: repeating-linear-gradient(45deg, var(--surface) 0 5px, var(--line) 5px 10px); }
+.job-colour-text { display: flex; flex-direction: column; line-height: 1.2; }
+.job-colour-text b { font-size: 1rem; }
+.job-colour-text small { color: var(--ink-3); font-size: 0.8rem; }

@@ -92,6 +92,10 @@
     ]);
     state.rows = data.rows || [];
     state.work = work.sessions || [];
+    // The powder colour each powdercoat job is getting, as its schedule shows it.
+    state.colourByPro = new Map(
+      ((subs && subs.jobs) || []).map((j) => [j.prod_order_no, { colour: j.colour, bc: j.colour_description || j.colour_code || "" }])
+    );
     const key = todayKey();
     // Powdercoat jobs carry their day on the job itself; doors and cavities
     // are booked in the schedule.
@@ -229,13 +233,14 @@
       state.hitPro === row.prod_order_no ? "is-hit" : "",
     ].filter(Boolean).join(" ");
 
-    return `<section class="${cls}" id="job-${esc(row.prod_order_no)}">
+    return `<section class="${cls}" id="job-${esc(row.prod_order_no)}"${colourStripe(row)}>
       <button type="button" class="job-head" data-pro="${esc(row.prod_order_no)}"
               aria-expanded="${open ? "true" : "false"}">
         <span class="job-pro">${esc(row.prod_order_no)}</span>
         <span class="job-qty">${num(row.total_qty)} ${unitWord(row.total_qty)}</span>
         <span class="job-customer">${esc(row.source_name || "Stock")}</span>
         <span class="job-item">${esc(row.item_summary || "")}</span>
+        ${colourHTML(row)}
         <span class="job-meta">
           ${row.sales_order_no ? `<span class="pill">${esc(row.sales_order_no)}</span>` : ""}
           ${due ? `<span class="pill ${due.late ? "late" : ""}">${esc(due.text)}</span>` : ""}
@@ -248,6 +253,30 @@
       <div class="job-strip"><span style="width:${pct}%"></span></div>
       ${open ? `<div class="stages">${stagesOf(row).map((s, i) => stageHTML(row, s, i)).join("")}</div>` : ""}
     </section>`;
+  }
+
+  // A powdercoat job's colour: a swatch with its name and code, and a stripe
+  // of it down the card's edge, so the right batch is easy to find.
+  function colourOf(row) {
+    return state.line === "powdercoat" && state.colourByPro ? state.colourByPro.get(row.prod_order_no) || null : null;
+  }
+
+  function colourStripe(row) {
+    const c = colourOf(row);
+    const hex = c && c.colour && c.colour.hex;
+    return hex && /^#[0-9a-fA-F]{6}$/.test(hex) ? ` style="border-left: 8px solid ${hex}"` : "";
+  }
+
+  function colourHTML(row) {
+    const c = colourOf(row);
+    if (!c) return "";
+    const hex = c.colour && /^#[0-9a-fA-F]{6}$/.test(c.colour.hex || "") ? c.colour.hex : null;
+    const name = c.colour ? c.colour.name : c.bc || "No colour given";
+    const detail = c.colour ? [c.colour.brand, c.colour.code].filter(Boolean).join(" · ") : "";
+    return `<span class="job-colour">
+        <span class="job-swatch${hex ? "" : " is-unknown"}"${hex ? ` style="background:${hex}"` : ""}>${hex ? "" : "?"}</span>
+        <span class="job-colour-text"><b>${esc(name)}</b>${detail ? `<small>${esc(detail)}</small>` : ""}</span>
+      </span>`;
   }
 
   // Read-at-a-distance summary of where a job is up to. Hidden on a phone,
