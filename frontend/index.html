@@ -164,7 +164,11 @@
                    placeholder="Find SO, PRO or colour…" autocomplete="off" spellcheck="false">
             <div class="schedule-dropzone pcs-dropzone schedule-holding-zone" data-date="holding" id="pcs-holding-zone"></div>
           </div>
-          <div class="schedule-board" id="pcs-board"></div>
+          <div class="board-scroller">
+            <!-- slides the two weeks sideways from above the board -->
+            <div class="board-scroll-top" id="pcs-scroll-top" aria-hidden="true"><div></div></div>
+            <div class="schedule-board" id="pcs-board"></div>
+          </div>
         </div>
         <div class="empty-state" id="pcs-empty" hidden></div>
       </div>

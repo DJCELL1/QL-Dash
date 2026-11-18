@@ -1846,7 +1846,9 @@
   // section jobs gather by colour, biggest batch first, because a colour change
   // is what costs time on the line.
 
-  const PCS_WINDOW_DAYS = 5;
+  // This week and next on screen at once; Prev and Next step a week at a time.
+  const PCS_WINDOW_DAYS = 10;
+  const PCS_STEP_DAYS = 5;
 
   // Each job's progress at the floor's four powdercoat steps, by PRO.
   function pcsRowMap() {
@@ -2119,6 +2121,7 @@
       .join("");
 
     wirePcsBoard();
+    wireBoardScrollTop("pcs-scroll-top", "pcs-board");
     renderNowStrip($("#pcs-now"), "powdercoat");
   }
 
@@ -2139,8 +2142,8 @@
       state.pcs.windowStart = addBusinessDays(state.pcs.windowStart || mostRecentOrSameMonday(new Date()), n);
       renderPcsSchedule();
     };
-    $("#pcs-prev").addEventListener("click", () => shift(-PCS_WINDOW_DAYS));
-    $("#pcs-next").addEventListener("click", () => shift(PCS_WINDOW_DAYS));
+    $("#pcs-prev").addEventListener("click", () => shift(-PCS_STEP_DAYS));
+    $("#pcs-next").addEventListener("click", () => shift(PCS_STEP_DAYS));
     $("#pcs-today").addEventListener("click", () => {
       state.pcs.windowStart = mostRecentOrSameMonday(new Date());
       renderPcsSchedule();

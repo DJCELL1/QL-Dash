@@ -206,7 +206,8 @@ material picked, Coated was picked, prepped and coated.
 
 The Powdercoating tab opens on a **Day schedule** (`renderPcsSchedule()` in
 `app.js`): Holding, then the working week, each day split into those four
-floor steps. A job's day is `sub_job_status.scheduled_date`, one day per job
+floor steps, two weeks at once (`PCS_WINDOW_DAYS`, Prev/Next step a week), with
+the same top scroll bar as the door and cavity boards (`#pcs-scroll-top`). A job's day is `sub_job_status.scheduled_date`, one day per job
 with no splitting; dropping it sets only that. Which section its units sit in
 comes from floor progress (`pcsPieces()`), the same way as the door board, with
 finished units kept ticked in Pack and a gone-by day's unfinished work in red.
@@ -392,8 +393,8 @@ decides what a tick is allowed to be and a refusal must not leave the grid
 showing something it isn't. Jobs measured in lengths have no whole units, so
 they get a quantity box instead.
 
-The door and cavity boards each have a scroll bar above them
-(`wireBoardScrollTop()`, `#schedule-scroll-top` / `#cavities-scroll-top`) that
+The door, cavity and powdercoat boards each have a scroll bar above them
+(`wireBoardScrollTop()`, `#schedule-scroll-top` / `#cavities-scroll-top` / `#pcs-scroll-top`) that
 moves the board sideways, stays pinned to the top of the screen while the page
 scrolls, and hides when the days already fit.
 
