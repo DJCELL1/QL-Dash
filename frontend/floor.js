@@ -258,6 +258,11 @@
   // A powdercoat job's colour: a swatch with its name and code, and a stripe
   // of it down the card's edge, so the right batch is easy to find.
   function colourOf(row) {
+    if (state.line === "doors") {
+      return row.colour || row.colour_description || row.colour_code
+        ? { colour: row.colour, bc: row.colour_description || row.colour_code || "" }
+        : null;
+    }
     return state.line === "powdercoat" && state.colourByPro ? state.colourByPro.get(row.prod_order_no) || null : null;
   }
 

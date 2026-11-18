@@ -2692,8 +2692,13 @@
   // and name the powdercoat schedule shows, so the floor can see it at a glance.
   function floorItemHTML(r) {
     const item = escapeAttr(r.item_summary || "—");
-    if (floorLine().id !== "powdercoat") return item;
-    const job = ((state.data.subBoard && state.data.subBoard.jobs) || []).find((j) => j.prod_order_no === r.prod_order_no);
+    const lineId = floorLine().id;
+    // Doors carry their own colour; a powdercoat job's comes from its board.
+    const job = lineId === "doors"
+      ? (r.colour || r.colour_description || r.colour_code ? r : null)
+      : lineId === "powdercoat"
+        ? ((state.data.subBoard && state.data.subBoard.jobs) || []).find((j) => j.prod_order_no === r.prod_order_no)
+        : null;
     if (!job) return item;
     const hex = job.colour && job.colour.hex;
     const detail = pcsColourDetail(job);

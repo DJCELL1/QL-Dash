@@ -709,6 +709,9 @@ def _group_records(records: list[dict]) -> dict[str, dict]:
     # already has a plain CNC row, so keeping one row per item throws away the
     # very row that says the door needs glazing.
     operations: dict[str, set[str]] = {}
+    # The colour BC gives a job, from whichever of its rows carries one: the
+    # collapse below keeps one row per item, and that may not be it.
+    colour_of: dict[str, tuple] = {}
 
     item_rows: dict[tuple[str, str], dict] = {}
     for r in records:
@@ -717,6 +720,8 @@ def _group_records(records: list[dict]) -> dict[str, dict]:
             continue
         if r.get("work_centre_description"):
             operations.setdefault(pro, set()).add(r["work_centre_description"])
+        if pro not in colour_of and (r.get("colour_code") or r.get("colour_description")):
+            colour_of[pro] = (r.get("colour_code"), r.get("colour_description"))
         item_key = r.get("item_no") or r.get("item_description") or ""
 
         # Count off the Prep row. Every operation row of an item repeats that
@@ -743,6 +748,8 @@ def _group_records(records: list[dict]) -> dict[str, dict]:
             "due_dates": [],
             "comments": [],
             "operations": operations.get(pro, set()),
+            "colour_code": colour_of.get(pro, (None, None))[0],
+            "colour_description": colour_of.get(pro, (None, None))[1],
             "total_qty": 0.0,
             "shortage": False,
         })
@@ -904,11 +911,16 @@ def api_factory():
     job_names = get_all_sales_orders()
     lookup = minutes_lookup()
     wms = get_sales_order_wms()
+    matcher = colours.Matcher(get_powder_colours())
     rows = []
     for pro, g in grouped.items():
         row = _factory_row(pro, g, progress, door_numbers, job_names, wms)
         if row is not None:
             row["minutes"] = _minutes_for(g, STAGES, lookup)
+            # the door's colour, matched the same way as a powdercoat job's
+            row["colour_code"] = g.get("colour_code")
+            row["colour_description"] = g.get("colour_description")
+            row["colour"] = matcher.match(g.get("colour_code"), g.get("colour_description"), pro)
             rows.append(row)
     rows.sort(key=lambda r: r["due_date"] or "9999-99-99")
 

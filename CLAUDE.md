@@ -168,11 +168,14 @@ The floor's "By day" view reads each line's own schedule: the door and cavity
 boards, and for powdercoating `buildPowdercoatCells()`, which lays each job on
 its `scheduled_date` with its units in the step the floor has reached
 (`pcsPieces()`). Unfinished work from earlier days rolls into today. On
-the powdercoat line the Item column also shows each job's powder colour
-(`floorItemHTML()`), swatch, name and code, read from the powdercoat board's
-jobs (`state.data.subBoard`). The phone app does the same on its powdercoat
-line (`colourHTML()` / `colourStripe()` in `floor.js`, from
-`/api/subcontractors`): a swatch, name and code on each job card and a stripe
+the powdercoat and door lines the Item column also shows each job's powder
+colour (`floorItemHTML()`), swatch, name and code: a powdercoat job's from the
+powdercoat board's jobs (`state.data.subBoard`), a door's from `/api/factory`,
+which now matches the door export's own Colour Code / Colour Description
+(first row of the PRO that has one, `_group_records()`) with the same
+`colours.Matcher`. A door with no colour in BC shows none. The phone app does the same on its powdercoat
+and door lines (`colourHTML()` / `colourStripe()` in `floor.js`, from
+`/api/subcontractors` and the door rows): a swatch, name and code on each job card and a stripe
 of the colour down the card's left edge.
 
 Note that powdercoat jobs are measured in both EA and LTHS. Per-row totals are
