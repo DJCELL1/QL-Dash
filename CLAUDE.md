@@ -178,6 +178,14 @@ and door lines (`colourHTML()` / `colourStripe()` in `floor.js`, from
 `/api/subcontractors` and the door rows): a swatch, name and code on each job card and a stripe
 of the colour down the card's left edge.
 
+On the powdercoat line both views also take ticks and a **Complete step** button
+(`renderFactoryCompleteBar()`, `POST /api/work/complete-many`). Each ticked job
+moves on one step: in All jobs the earliest step it hasn't finished, in By day
+the bucket it was ticked in (`state.selectedSteps`, `PRO|stage`). The step is
+set to what the step before it has done (the whole job on the first step), so
+it never runs ahead and touches no other step; a job that can't move is listed
+back, not refused. `canBulkComplete()` is the switch to offer it on other lines.
+
 Note that powdercoat jobs are measured in both EA and LTHS. Per-row totals are
 right, but the floor's aggregate "items" tile sums the two together, which the
 subcontractor board deliberately avoids (see `fmtQtyTotals`).

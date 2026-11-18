@@ -348,11 +348,17 @@ body.is-board-view main { max-width: none; }
 .factory-toolbar { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
 .factory-reset-wrap { display: inline-flex; align-items: center; gap: 8px; margin-left: auto; }
 .factory-reset-wrap[hidden] { display: none; }
+.factory-complete-wrap { display: inline-flex; align-items: center; gap: 8px; margin-left: auto; }
+.factory-complete-wrap[hidden] { display: none; }
+.factory-complete-wrap + .factory-reset-wrap { margin-left: 0; }
+.factory-step-pick, .factory-step-pick-all { cursor: pointer; margin: 0; }
 .factory-reset-hint { font-size: 12px; color: var(--text-muted); white-space: nowrap; }
 
 .factory-table th.col-pick, .factory-table td.col-pick { width: 30px; text-align: center; padding-left: 8px; padding-right: 4px; }
 .factory-pick, .factory-pick-all { cursor: pointer; accent-color: var(--status-critical); margin: 0; }
 .factory-table tr.is-picked td { background: color-mix(in srgb, var(--status-critical) 12%, transparent); }
+/* ticked to move on: not the red of a reset */
+.factory-table tr.is-step-picked td { background: color-mix(in srgb, var(--series-1) 14%, transparent); }
 
 /* ---------- subcontractor scheduling board ---------- */
 
@@ -1393,6 +1399,7 @@ body.is-board-view main { max-width: none; }
   .factory-toolbar .segmented { width: 100%; }
   .factory-toolbar .segmented-btn { flex: 1; }
   .factory-reset-wrap { flex-direction: column; align-items: stretch; gap: 6px; }
+  .factory-complete-wrap { flex-direction: column; align-items: stretch; gap: 6px; }
 
   /* ---- Scheduling: one day at a time, stacked under Holding ---- */
   .schedule-layout { flex-direction: column; }
@@ -1515,6 +1522,9 @@ body.is-readonly .sc-actions,
 body.is-readonly .stage-complete-btn,
 body.is-readonly .schedule-reset-bar,
 body.is-readonly .factory-reset-wrap,
+body.is-readonly .factory-complete-wrap,
+body.is-readonly .factory-step-pick,
+body.is-readonly .factory-step-pick-all,
 body.is-readonly .sub-group-controls,
 body.is-readonly .schedule-day-pick,
 body.is-readonly .factory-pick,

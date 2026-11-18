@@ -46,6 +46,9 @@
     selectedCards: new Map(),
     selectedDays: new Set(),
     selectedPros: new Set(),
+    // By day's ticks are a job at a step ("PRO|stage"): a job can sit in two
+    // buckets at once, and each tick moves on just that step's units.
+    selectedSteps: new Set(),
     factoryByPro: new Map(),
     factoryDay: null,
     labelPro: null, // PRO being previewed on the Labels tab
@@ -2913,6 +2916,7 @@
         // Ticks don't carry across lines: a job picked on Doors is out of sight
         // on Cavities, and Reset shouldn't clear work nobody can see selected.
         state.selectedPros.clear();
+        state.selectedSteps.clear();
         renderFactory();
       };
     });
@@ -3014,15 +3018,28 @@
           (a.r.due_date || "9999-99-99").localeCompare(b.r.due_date || "9999-99-99")
       );
       const totalDoors = bucketRows.reduce((s, b) => s + b.qty, 0);
+      // Powdercoat jobs can be ticked here and moved on together.
+      const pickable = bucketRows.filter((b) => (b.r[`${stage}_done`] || 0) < b.r.total_qty);
+      const stepKey = (r) => `${r.prod_order_no}|${stage}`;
+      const allStepsPicked = pickable.length > 0 && pickable.every((b) => state.selectedSteps.has(stepKey(b.r)));
+      const pickHead = canBulkComplete(line)
+        ? `<th class="col-pick"><input type="checkbox" class="factory-step-pick-all" data-stage="${stage}" ${allStepsPicked ? "checked" : ""} ${pickable.length ? "" : "disabled"} title="Select all in ${stageLabel(stage)}"></th>`
+        : "";
+      const pickCell = (r) => {
+        if (!canBulkComplete(line)) return "";
+        const done = (r[`${stage}_done`] || 0) >= r.total_qty;
+        return `<td class="col-pick">${done ? "" : `<input type="checkbox" class="factory-step-pick" data-key="${escapeAttr(stepKey(r))}" ${state.selectedSteps.has(stepKey(r)) ? "checked" : ""}>`}</td>`;
+      };
 
       const body =
         bucketRows.length === 0
           ? '<div class="factory-bucket-empty">Nothing scheduled</div>'
           : `<div class="table-wrap" style="border:none;border-radius:0;"><table class="data-table factory-table"><thead>
-              <tr><th class="col-rank">#</th><th>Order</th><th>Customer</th><th>Item</th><th>Due</th><th>To do</th><th>${stageLabel(stage)} done</th></tr></thead><tbody>` +
+              <tr>${pickHead}<th class="col-rank">#</th><th>Order</th><th>Customer</th><th>Item</th><th>Due</th><th>To do</th><th>${stageLabel(stage)} done</th></tr></thead><tbody>` +
             bucketRows
               .map(
-                ({ r, qty }, i) => `<tr>
+                ({ r, qty }, i) => `<tr class="${state.selectedSteps.has(stepKey(r)) ? "is-step-picked" : ""}">
+                ${pickCell(r)}
                 <td class="col-rank">${i + 1}</td>
                 <td><div class="cell-primary">${r.prod_order_no}</div><div class="cell-muted">${soLabel(r.sales_order_no)}</div></td>
                 <td>${customerLabel(r.source_name)}</td>
@@ -3042,10 +3059,104 @@
     }).join("");
 
     wireStageControls(bucketsEl);
+    wireDayStepPickers(bucketsEl);
+  }
+
+  // ---------- moving several jobs on at once ----------
+  //
+  // Powdercoating only for now: tick jobs, press Complete step, and each moves
+  // on one step. In All jobs that's the earliest step it hasn't finished; in By
+  // day it's the bucket it was ticked in.
+
+  const canBulkComplete = (line) => line.id === "powdercoat";
+
+  function wireDayStepPickers(container) {
+    $$(".factory-step-pick", container).forEach((box) => {
+      box.addEventListener("change", () => {
+        if (box.checked) state.selectedSteps.add(box.dataset.key);
+        else state.selectedSteps.delete(box.dataset.key);
+        renderFactory();
+      });
+    });
+    $$(".factory-step-pick-all", container).forEach((all) => {
+      all.addEventListener("change", () => {
+        const boxes = $$(".factory-step-pick", all.closest("table"));
+        for (const b of boxes) {
+          if (all.checked) state.selectedSteps.add(b.dataset.key);
+          else state.selectedSteps.delete(b.dataset.key);
+        }
+        renderFactory();
+      });
+    });
+  }
+
+  // The job and step each selected tick stands for, for the current view.
+  function bulkCompleteItems() {
+    const line = floorLine();
+    if (state.filters.factory.viewMode === "day") {
+      const rows = new Map((line.rows || []).map((r) => [r.prod_order_no, r]));
+      return [...state.selectedSteps]
+        .map((k) => {
+          const sep = k.lastIndexOf("|");
+          return { prod_order_no: k.slice(0, sep), stage: k.slice(sep + 1) };
+        })
+        .filter((it) => rows.has(it.prod_order_no) && line.stages.includes(it.stage));
+    }
+    const items = [];
+    for (const r of line.rows || []) {
+      if (!state.selectedPros.has(r.prod_order_no)) continue;
+      const stage = stagesOfRow(r).find((s) => (r[`${s}_done`] || 0) < r.total_qty);
+      if (stage) items.push({ prod_order_no: r.prod_order_no, stage });
+    }
+    return items;
+  }
+
+  function renderFactoryCompleteBar() {
+    const wrap = $("#factory-complete-wrap");
+    const line = floorLine();
+    wrap.hidden = !canBulkComplete(line) || !line.data;
+    if (wrap.hidden) return;
+    const n = bulkCompleteItems().length;
+    $("#factory-complete").disabled = n === 0;
+    $("#factory-complete-hint").textContent =
+      n === 0 ? "Tick jobs to move them on" : `${n} job${n === 1 ? "" : "s"} to move on`;
+  }
+
+  function wireFactoryComplete() {
+    $("#factory-complete").addEventListener("click", async () => {
+      const items = bulkCompleteItems();
+      if (!items.length) return;
+      const line = floorLine();
+      const next = (stage) => {
+        const i = line.stages.indexOf(stage);
+        return i + 1 < line.stages.length ? stageLabel(line.stages[i + 1]) : "finished";
+      };
+      const list = items.slice(0, 12)
+        .map((it) => `  ${it.prod_order_no}: ${stageLabel(it.stage)} → ${next(it.stage)}`)
+        .join("\n") + (items.length > 12 ? `\n  +${items.length - 12} more` : "");
+      if (!confirm(`Move ${items.length} job${items.length === 1 ? "" : "s"} on a step?\n\n${list}`)) return;
+
+      $("#factory-complete").disabled = true;
+      try {
+        const res = await postJSON("/api/work/complete-many", { items });
+        state.selectedPros.clear();
+        state.selectedSteps.clear();
+        await Promise.all([loadPowdercoat(), loadSubBoard().catch(() => {}), loadWork()]);
+        renderFactory();
+        if (res.skipped && res.skipped.length) {
+          alert(`Moved ${res.moved.length}. Left ${res.skipped.length} as they were:\n\n` +
+            res.skipped.map((s) => `  ${s.prod_order_no} (${stageLabel(s.stage)}): ${s.reason}`).join("\n"));
+        }
+      } catch (e) {
+        if (!e.needsSignIn) notifyError(e, "Couldn't move those jobs on.");
+        renderFactoryCompleteBar();
+      }
+    });
   }
 
   function renderFactory() {
     renderNowStrip($("#factory-now"), floorLine().id);
+    renderFactoryCompleteBar();
     const line = floorLine();
     const data = line.data;
     const statsEl = $("#factory-stats");
@@ -7554,6 +7665,7 @@
   wireCavities();
   wireFactoryDayNav();
   wireFactoryReset();
+  wireFactoryComplete();
   refreshAll().catch((e) => console.error(e));
 
   // light polling so a drop-in file shows up without a manual click

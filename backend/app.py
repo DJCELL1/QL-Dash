@@ -1978,6 +1978,41 @@ def api_work_set(request: Request, body: WorkSet):
     return {"progress": dict(get_stage_progress(body.prod_order_no) or {}), "total_qty": total}
 
 
+class WorkCompleteMany(BaseModel):
+    items: list[WorkIn]
+
+
+@app.post("/api/work/complete-many")
+def api_work_complete_many(request: Request, body: WorkCompleteMany):
+    """Several jobs at once, each moved on from one step: everything that has
+    come through the step before it is marked done there (the whole job, on a
+    first step). Never more than that, so the ordering rule holds without
+    touching any other step. A job that can't move is reported, not refused."""
+    who = actor(request)
+    moved, skipped = [], []
+    for it in body.items:
+        try:
+            line, total, stages, idx = _line_job(it.prod_order_no, it.stage)
+        except HTTPException as e:
+            skipped.append({"prod_order_no": it.prod_order_no, "stage": it.stage, "reason": e.detail})
+            continue
+        existing = dict(get_stage_progress(it.prod_order_no) or {})
+        current = existing.get(f"{it.stage}_done") or 0
+        target = total if idx == 0 else min(total, existing.get(f"{stages[idx - 1]}_done") or 0)
+        label = line["labels"][it.stage]
+        if target <= current:
+            reason = (f"{label} is already done." if current >= total else
+                      f"Nothing has come through {line['labels'][stages[idx - 1]]} yet.")
+            skipped.append({"prod_order_no": it.prod_order_no, "stage": it.stage, "reason": reason})
+            continue
+        set_stage_progress(it.prod_order_no, it.stage, target, who)
+        _stop_if_finished(it.prod_order_no, it.stage, target, total)
+        write_audit(who, "work.complete-many",
+                    f"{it.prod_order_no} {it.stage} {_fmt_qty(current)} -> {_fmt_qty(target)} of {_fmt_qty(total)}")
+        moved.append({"prod_order_no": it.prod_order_no, "stage": it.stage, "from": current, "to": target, "total": total})
+    return {"moved": moved, "skipped": skipped}
+
+
 @app.post("/api/work/undo")
 def api_work_undo(request: Request, body: WorkIn):
     """Take a step back to where it was before its last change. The tick log
