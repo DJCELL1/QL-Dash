@@ -2711,6 +2711,14 @@
       </div>${item}`;
   }
 
+  // Powdercoat for our own doors or cavities (same sales order): it goes back
+  // into the factory, so nobody packs it for freight.
+  function internalBadgeHTML(r) {
+    const lines = (floorLine().id === "powdercoat" && r.internal_for) || [];
+    if (!lines.length) return "";
+    return `<span class="internal-badge" title="Same sales order as a ${escapeAttr(lines.join(" and ").toLowerCase())} job. Goes back into the factory: don't pack it for freight.">Internal · ${escapeAttr(lines.join(" & "))} · no freight pack</span>`;
+  }
+
   function stageCellHTML(stage, r) {
     const done = r[`${stage}_done`] || 0;
     const total = r.total_qty;
@@ -3041,7 +3049,7 @@
                 ({ r, qty }, i) => `<tr class="${state.selectedSteps.has(stepKey(r)) ? "is-step-picked" : ""}">
                 ${pickCell(r)}
                 <td class="col-rank">${i + 1}</td>
-                <td><div class="cell-primary">${r.prod_order_no}</div><div class="cell-muted">${soLabel(r.sales_order_no)}</div></td>
+                <td><div class="cell-primary">${r.prod_order_no}</div><div class="cell-muted">${soLabel(r.sales_order_no)}</div>${internalBadgeHTML(r)}</td>
                 <td>${customerLabel(r.source_name)}</td>
                 <td>${floorItemHTML(r)}</td>
                 <td>${factoryDueCell(r)}</td>
@@ -3252,7 +3260,7 @@
         const picked = state.selectedPros.has(r.prod_order_no);
         return `<tr class="${r.status === "completed" ? "is-completed-row" : ""} ${picked ? "is-picked" : ""}">
           <td class="col-pick"><input type="checkbox" class="factory-pick" data-pro="${r.prod_order_no}" ${picked ? "checked" : ""}></td>
-          <td class="col-pro"><div class="cell-primary">${r.prod_order_no} ${showBadge ? '<span class="completed-badge">✓ Done</span>' : ""}</div><div class="cell-muted">${r.sales_order_no || ""}</div></td>
+          <td class="col-pro"><div class="cell-primary">${r.prod_order_no} ${showBadge ? '<span class="completed-badge">✓ Done</span>' : ""}</div><div class="cell-muted">${r.sales_order_no || ""}</div>${internalBadgeHTML(r)}</td>
           <td class="col-customer">${customerLabel(r.source_name)}</td>
           <td class="col-item">${floorItemHTML(r)}</td>
           <td class="col-due" data-label="Due">${factoryDueCell(r)}</td>

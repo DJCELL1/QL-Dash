@@ -657,6 +657,18 @@ body.is-board-view main { max-width: none; }
 
 .factory-table tr.is-completed-row { opacity: 0.7; }
 .completed-badge { color: var(--success-text); font-weight: 700; font-size: 11px; }
+/* powdercoat for our own doors or cavities, not for freight */
+.internal-badge {
+  display: inline-block;
+  margin-top: 4px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: var(--series-1);
+  color: #f7f7fb;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
 
 .factory-mini { display: flex; align-items: center; gap: 6px; }
 .stage-dots { display: flex; gap: 2px; }

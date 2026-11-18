@@ -217,6 +217,7 @@ main { padding: 10px 12px 40px; }
 }
 .pill.late { background: var(--critical-bg); color: var(--critical); }
 .pill.done { background: var(--good-bg); color: var(--good-ink); }
+.pill.internal { background: #637a90; color: #f7f7fb; }
 
 /* thin progress strip along the bottom of the head */
 .job-strip { height: 5px; background: var(--plane); }

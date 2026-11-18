@@ -243,6 +243,7 @@
         ${colourHTML(row)}
         <span class="job-meta">
           ${row.sales_order_no ? `<span class="pill">${esc(row.sales_order_no)}</span>` : ""}
+          ${internalPill(row)}
           ${due ? `<span class="pill ${due.late ? "late" : ""}">${esc(due.text)}</span>` : ""}
           ${complete ? '<span class="pill done">✓ Finished</span>' : ""}
           ${stagesOf(row).filter((s) => workOn(row.prod_order_no, s.key).length)
@@ -264,6 +265,15 @@
         : null;
     }
     return state.line === "powdercoat" && state.colourByPro ? state.colourByPro.get(row.prod_order_no) || null : null;
+  }
+
+  // Powdercoat for our own doors or cavities: back into the factory, so it
+  // isn't packed for freight.
+  function internalPill(row) {
+    const lines = (state.line === "powdercoat" && row.internal_for) || [];
+    return lines.length
+      ? `<span class="pill internal">Internal · ${esc(lines.join(" & "))} · no freight pack</span>`
+      : "";
   }
 
   function colourStripe(row) {

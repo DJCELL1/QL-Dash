@@ -1157,6 +1157,23 @@ def _pc_row(pro: str, g: dict, progress: dict, wms: dict | None = None) -> dict 
     return row
 
 
+def _so_key(so) -> str:
+    return str(so or "").strip().upper()
+
+
+def _internal_sales_orders() -> dict[str, list[str]]:
+    """Sales orders that also have door or cavity jobs, with which lines.
+    Powdercoating on one of those is parts for our own line."""
+    out: dict[str, list[str]] = {}
+    for dataset, label in (("joinery", "Doors"), ("cavities", "Cavities")):
+        _, grouped = _pro_totals(dataset)
+        for g in grouped.values():
+            key = _so_key(g.get("sales_order_no"))
+            if key and label not in out.setdefault(key, []):
+                out[key].append(label)
+    return out
+
+
 @app.get("/api/powdercoat")
 def api_powdercoat():
     as_of, grouped = _pro_totals(PC_DATASET)
@@ -1166,11 +1183,15 @@ def api_powdercoat():
     progress = get_all_stage_progress()
     lookup = minutes_lookup()
     wms = get_sales_order_wms()
+    internal = _internal_sales_orders()
     rows = []
     for pro, g in grouped.items():
         row = _pc_row(pro, g, progress, wms)
         if row is not None:
             row["minutes"] = _minutes_for(g, PC_STAGES, lookup)
+            # Coated for our own doors or cavities: it goes back into the
+            # factory, not out on a truck, so it isn't packed for freight.
+            row["internal_for"] = internal.get(_so_key(g["sales_order_no"]), [])
             rows.append(row)
     rows.sort(key=lambda r: r["due_date"] or "9999-99-99")
     return {"as_of": as_of, "rows": rows}

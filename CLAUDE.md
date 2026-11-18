@@ -186,6 +186,12 @@ set to what the step before it has done (the whole job on the first step), so
 it never runs ahead and touches no other step; a job that can't move is listed
 back, not refused. `canBulkComplete()` is the switch to offer it on other lines.
 
+A powdercoat job whose sales order also has a door or cavity job is parts for
+our own line, so it isn't packed for freight. `/api/powdercoat` marks it
+`internal_for` (`_internal_sales_orders()`, matched on the SO, trimmed and
+upper-cased), and the Factory floor tab (`internalBadgeHTML()`) and the phone
+(`internalPill()`) show "Internal · Doors · no freight pack" beside the SO.
+
 Note that powdercoat jobs are measured in both EA and LTHS. Per-row totals are
 right, but the floor's aggregate "items" tile sums the two together, which the
 subcontractor board deliberately avoids (see `fmtQtyTotals`).
