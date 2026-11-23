@@ -2014,6 +2014,58 @@
       .join("");
   }
 
+  // Holding grouped by sales order instead of colour, so one order's parts can
+  // be pulled onto a day together. Soonest due first; the head shows the order's
+  // customer and the colours in it, and drags the whole order like a batch.
+  function pcsSoGroupsHTML(jobs, zoneKey, showStatus) {
+    const groups = new Map();
+    for (const j of jobs) {
+      const k = soLabel(j.sales_order_no);
+      if (!groups.has(k)) groups.set(k, []);
+      groups.get(k).push(j);
+    }
+    const internal = new Map(((state.powdercoat && state.powdercoat.rows) || []).map((r) => [r.prod_order_no, r.internal_for || []]));
+    return Array.from(groups.entries())
+      .map(([so, list]) => ({ so, list: list.sort(pcsByDue) }))
+      .sort((a, b) => pcsByDue(a.list[0], b.list[0]) || a.so.localeCompare(b.so))
+      .map(({ so, list }) => {
+        const groupKey = `pcs:${zoneKey}|so:${so}`;
+        const open = state.expanded.has(groupKey);
+        const payload = list.map((j) => ({ pro: j.prod_order_no, wc: j.work_centre_no }));
+        const customer = list.find((j) => j.source_name) || {};
+        // one swatch per colour in the order, so a mixed order reads as one
+        const colours = [];
+        const seen = new Set();
+        for (const j of list) {
+          const k = pcsColourKey(j);
+          if (seen.has(k)) continue;
+          seen.add(k);
+          colours.push(j);
+        }
+        const swatches = colours.slice(0, 6).map((j) => {
+          const hex = j.colour && j.colour.hex;
+          return `<span class="pc-so-swatch${hex ? "" : " is-unknown"}"${hex ? ` style="background:${hex}"` : ""} title="${escapeAttr(pcsColourName(j))}"></span>`;
+        }).join("") + (colours.length > 6 ? `<span class="pc-so-more">+${colours.length - 6}</span>` : "");
+        const lines = [...new Set(list.flatMap((j) => internal.get(j.prod_order_no) || []))];
+        return `<div class="schedule-group pc-group">
+          <div class="schedule-group-head pc-group-head pc-so-head" draggable="true" data-group-key="${escapeAttr(groupKey)}"
+               data-group-jobs="${escapeAttr(JSON.stringify(payload))}"
+               title="Drag to move all ${list.length} job${list.length === 1 ? "" : "s"} on ${escapeAttr(so)} together">
+            <div class="schedule-group-top">
+              <span class="schedule-group-chevron">${open ? "▾" : "▸"}</span>
+              <span class="pc-group-name">${escapeAttr(so)}</span>
+              <span class="pc-so-swatches">${swatches}</span>
+            </div>
+            <div class="pc-group-count">${escapeAttr(customer.source_name || "")}${customer.source_name ? " · " : ""}${list.length} job${list.length === 1 ? "" : "s"} · ${fmtQtyTotals(list)}</div>
+            ${lines.length ? `<div class="pc-group-count"><span class="internal-badge">Internal · ${escapeAttr(lines.join(" & "))}</span></div>` : ""}
+            ${list.some((j) => j.overdue) ? '<div class="sub-group-flag text-critical">Overdue</div>' : ""}
+          </div>
+          ${open ? `<div class="schedule-group-body">${list.map((j) => pcsCardHTML(j, showStatus)).join("")}</div>` : ""}
+        </div>`;
+      })
+      .join("");
+  }
+
   // The powdercoat schedule as day cells, keyed "<day>|<step>" like the door
   // and cavity boards, for the Factory floor's By day view.
   function buildPowdercoatCells() {
@@ -2075,6 +2127,8 @@
       zone.innerHTML = '<div class="schedule-holding-empty">Nothing in Holding matches</div>';
     } else if (state.pcs.sort === "colour") {
       zone.innerHTML = pcsGroupsHTML(shown, "holding", true);
+    } else if (state.pcs.sort === "so") {
+      zone.innerHTML = pcsSoGroupsHTML(shown, "holding", true);
     } else {
       zone.innerHTML = [...shown].sort(state.pcs.sort === "eta" ? pcsByEta : pcsByDue).map((j) => pcsCardHTML(j, true)).join("");
     }

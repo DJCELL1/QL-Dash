@@ -2375,6 +2375,12 @@ body.is-gantt-open { overflow: hidden; }
 .pc-card-colour-name { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pc-group-name { font-weight: 700; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .pc-group-count { padding-left: 38px; font-size: 11px; color: var(--text-muted); }
+/* Holding grouped by sales order: the colours in the order, small, after its number */
+.pc-so-head .pc-group-count { padding-left: 18px; }
+.pc-so-swatches { display: inline-flex; gap: 3px; margin-left: auto; flex-shrink: 0; align-items: center; }
+.pc-so-swatch { width: 12px; height: 12px; border-radius: 3px; border: 1px solid var(--border); }
+.pc-so-swatch.is-unknown { background: repeating-linear-gradient(45deg, var(--page-plane) 0 3px, var(--gridline) 3px 6px); }
+.pc-so-more { font-size: 10px; color: var(--text-muted); font-weight: 700; }
 .pc-day-colours { margin-left: auto; font-size: 11px; color: var(--text-muted); }
 .pc-behind { font-size: 12px; font-weight: 600; color: var(--status-critical); }
 

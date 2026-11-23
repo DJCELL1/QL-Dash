@@ -211,8 +211,11 @@ the same top scroll bar as the door and cavity boards (`#pcs-scroll-top`). A job
 with no splitting; dropping it sets only that. Which section its units sit in
 comes from floor progress (`pcsPieces()`), the same way as the door board, with
 finished units kept ticked in Pack and a gone-by day's unfinished work in red.
-Holding is everything with no date that isn't finished, sortable by colour
-batch (most jobs first), ETA (`eta_date`, else due) or due date. The older
+Holding is everything with no date that isn't finished, grouped by colour
+batch (most jobs first) or by sales order (`pcsSoGroupsHTML()`, soonest due
+first, the order's colours as small swatches and its Internal tag), or sorted by
+ETA (`eta_date`, else due) or due date. A sales-order group drags onto a day
+whole, like a colour batch. The older
 status lanes, still set by hand, and the order list are the other two toggles.
 
 Each card is filled with its powder colour (text light or dark by `inkOn()`),
