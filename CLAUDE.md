@@ -218,8 +218,17 @@ ETA (`eta_date`, else due) or due date. A sales-order group drags onto a day
 whole, like a colour batch. The older
 status lanes, still set by hand, and the order list are the other two toggles.
 
+Each day's sections group by sales order (`pcsSoGroupsHTML()`, the same as
+Holding's "By sales order"): the head shows the SO, the first two words of the
+client (`shortClient()`), its due date, and goes green with "done" when every
+piece of it in that section is finished; clicking it opens the PROs. A job
+posted in BC after being put on a day stays there finished: `/api/subcontractors`
+adds it back from the last export that had it (`sub_jobs_on_a_day()`,
+`posted: true`), and `_pro_totals()` does the same for `/api/powdercoat`, so its
+units sit ticked in Pack. A posted job never comes back to Holding.
+
 Each card is filled with its powder colour (text light or dark by `inkOn()`),
-with the client name and SO at the top. Jobs gather by colour everywhere on that board, batched on the matched colour's
+with the client name (first two words) and SO at the top. Jobs gather by colour everywhere on that board, batched on the matched colour's
 `key`: `col:<chart code>` however the job got there (name, alias or set by
 hand), or `hex:<colour>` for one picked by eye. `backend/colours.py` resolves a
 job's BC `colour_code` / `colour_description` to a swatch: a colour set by hand

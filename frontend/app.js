@@ -1866,8 +1866,10 @@
     const row = pcsRowMap().get(j.prod_order_no);
     const total = row ? row.total_qty || 0 : j.remaining_qty || j.qty || 0;
     let cap = total;
+    // Posted in BC is finished, whatever the floor ticked.
+    const allDone = j.posted || (row && row.status === "completed");
     const passed = PC_STAGES.map((st) => {
-      cap = row && row.status === "completed" ? total : Math.min(cap, row ? row[`${st}_done`] || 0 : 0);
+      cap = allDone ? total : Math.min(cap, row ? row[`${st}_done`] || 0 : 0);
       return cap;
     });
     return { total, passed };
@@ -1935,7 +1937,7 @@
     const behind = j.pcStage && !done && j.scheduled_date && j.scheduled_date.slice(0, 10) < dateKey(new Date());
     const stage = j.pcStage || pcsCurrentStage(j);
     const due = j.due_date
-      ? j.overdue
+      ? j.overdue && !done
         ? `<span class="text-critical">Due ${fmtDate(j.due_date)}</span>`
         : `Due ${fmtDate(j.due_date)}`
       : "No due date";
@@ -1945,7 +1947,7 @@
     const hex = j.colour && j.colour.hex;
     const paint = hex ? ` style="background:${hex};color:${inkOn(hex)}"` : "";
     return `<div class="sub-card pc-card${hex ? " is-coloured" : ""}${done ? " is-pc-done" : ""}${behind ? " is-card-behind" : ""}"${paint} draggable="true" data-pro="${j.prod_order_no}" data-wc="${j.work_centre_no}">
-      <div class="pc-card-client">${customerLabel(j.source_name)}</div>
+      <div class="pc-card-client" title="${escapeAttr(j.source_name || "")}">${escapeAttr(shortClient(j.source_name))}</div>
       <div class="pc-card-so">${soLabel(j.sales_order_no)}</div>
       <div class="sub-card-top">
         <span class="sub-card-pro">${j.prod_order_no}</span>
@@ -1962,6 +1964,13 @@
       ${behind ? `<span class="sc-behind">Behind — ${fmtDayDate(parseDateKey(j.scheduled_date.slice(0, 10)))}</span>` : ""}
       ${workBadgeHTML(j.prod_order_no, stage)}
     </div>`;
+  }
+
+  // The first two words of a client's name, so it fits a card on one line;
+  // the full name is the tooltip.
+  function shortClient(name) {
+    const words = String(name || "").trim().split(/\s+/).filter(Boolean);
+    return words.length ? words.slice(0, 2).join(" ") : "";
   }
 
   // Dark text on a light colour, white on a dark one, by perceived lightness.
@@ -2047,8 +2056,16 @@
           return `<span class="pc-so-swatch${hex ? "" : " is-unknown"}"${hex ? ` style="background:${hex}"` : ""} title="${escapeAttr(pcsColourName(j))}"></span>`;
         }).join("") + (colours.length > 6 ? `<span class="pc-so-more">+${colours.length - 6}</span>` : "");
         const lines = [...new Set(list.flatMap((j) => internal.get(j.prod_order_no) || []))];
+        // On a day, a piece is done when its units are finished (pieceDone);
+        // the whole order is done here when every piece of it is.
+        const done = list.every((j) => j.pcStage && j.pieceDone >= j.remaining_qty - 0.001);
+        const due = list.map((j) => j.due_date).filter(Boolean).sort()[0];
+        const overdue = !done && list.some((j) => j.overdue);
+        const dueText = due
+          ? `<span class="${overdue ? "text-critical" : ""}">Due ${fmtDate(due)}</span>`
+          : '<span class="cell-muted">No due date</span>';
         return `<div class="schedule-group pc-group">
-          <div class="schedule-group-head pc-group-head pc-so-head" draggable="true" data-group-key="${escapeAttr(groupKey)}"
+          <div class="schedule-group-head pc-group-head pc-so-head${done ? " is-pc-done" : ""}" draggable="true" data-group-key="${escapeAttr(groupKey)}"
                data-group-jobs="${escapeAttr(JSON.stringify(payload))}"
                title="Drag to move all ${list.length} job${list.length === 1 ? "" : "s"} on ${escapeAttr(so)} together">
             <div class="schedule-group-top">
@@ -2056,9 +2073,10 @@
               <span class="pc-group-name">${escapeAttr(so)}</span>
               <span class="pc-so-swatches">${swatches}</span>
             </div>
-            <div class="pc-group-count">${escapeAttr(customer.source_name || "")}${customer.source_name ? " · " : ""}${list.length} job${list.length === 1 ? "" : "s"} · ${fmtQtyTotals(list)}</div>
+            <div class="pc-group-count">${escapeAttr(shortClient(customer.source_name))}${customer.source_name ? " · " : ""}${list.length} job${list.length === 1 ? "" : "s"} · ${fmtQtyTotals(list)}</div>
+            <div class="pc-group-count pc-so-due">${dueText}${done ? ' · <span class="sc-done">✓ done</span>' : ""}</div>
             ${lines.length ? `<div class="pc-group-count"><span class="internal-badge">Internal · ${escapeAttr(lines.join(" & "))}</span></div>` : ""}
-            ${list.some((j) => j.overdue) ? '<div class="sub-group-flag text-critical">Overdue</div>' : ""}
+            ${overdue ? '<div class="sub-group-flag text-critical">Overdue</div>' : ""}
           </div>
           ${open ? `<div class="schedule-group-body">${list.map((j) => pcsCardHTML(j, showStatus)).join("")}</div>` : ""}
         </div>`;
@@ -2080,7 +2098,7 @@
           pro: j.prod_order_no,
           qty: p.remaining_qty,
           stageComplete: p.pieceDone >= p.remaining_qty - 0.001,
-          posted: false,
+          posted: !!j.posted,
         });
       }
     }
@@ -2160,7 +2178,7 @@
           const here = pieces.filter((p) => p.pcStage === st);
           return `<div class="schedule-stage-section pc-section-${st}">
             <div class="schedule-stage-label">${escapeAttr(stageLabel(st))}${here.length ? " — " + fmtQtyTotals(here) : ""}</div>
-            <div class="schedule-dropzone pcs-dropzone" data-date="${dKey}">${pcsGroupsHTML(here, dKey + "|" + st, false)}</div>
+            <div class="schedule-dropzone pcs-dropzone" data-date="${dKey}">${pcsSoGroupsHTML(here, dKey + "|" + st, false)}</div>
           </div>`;
         }).join("");
         return `<div class="schedule-day ${dKey === todayK ? "is-today" : ""}">

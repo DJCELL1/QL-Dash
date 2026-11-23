@@ -677,6 +677,17 @@ def pros_with_dated_schedule() -> set[str]:
         return {row["prod_order_no"] for row in cur.fetchall()}
 
 
+def sub_jobs_on_a_day() -> set[tuple[str, str]]:
+    """Powdercoat jobs (PRO, work centre) planned onto a real day. Their day
+    lives in sub_job_status rather than schedule_entries."""
+    with get_conn() as conn:
+        cur = conn.execute(
+            "SELECT prod_order_no, work_centre_no FROM sub_job_status "
+            "WHERE scheduled_date IS NOT NULL AND scheduled_date <> '' AND scheduled_date <> 'holding'"
+        )
+        return {(r["prod_order_no"], r["work_centre_no"]) for r in cur.fetchall()}
+
+
 def records_last_seen(dataset: str, prod_order_nos) -> list[dict]:
     """Each named PRO's rows from the most recent snapshot it appeared in.
 

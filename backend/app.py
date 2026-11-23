@@ -44,6 +44,7 @@ from db import (
     latest_snapshot,
     lock_day,
     pros_with_dated_schedule,
+    sub_jobs_on_a_day,
     recent_audit,
     records_last_seen,
     reset_stage_progress,
@@ -801,7 +802,11 @@ def _pro_totals(dataset: str = "joinery") -> tuple[str | None, dict[str, dict]]:
 
     grouped = _group_records(get_records_for_snapshot(snap["id"]))
 
-    missing = pros_with_dated_schedule() - set(grouped)
+    # Powdercoat days are kept per job in sub_job_status, not as bookings.
+    dated = pros_with_dated_schedule()
+    if dataset in SUB_DATASETS:
+        dated |= {pro for pro, _ in sub_jobs_on_a_day()}
+    missing = dated - set(grouped)
     if missing:
         for pro, g in _group_records(records_last_seen(dataset, missing)).items():
             g["posted"] = True
@@ -1622,9 +1627,23 @@ def api_subcontractors():
     purchase_orders = get_all_purchase_orders()
     matcher = colours.Matcher(get_powder_colours())
 
+    # A job posted in BC drops out of the next export. One already planned onto
+    # a day stays on it, finished, from the last export that still had it, so
+    # a day's work doesn't vanish overnight. Holding never brings one back.
+    present = {(r.get("prod_order_no"), r.get("work_centre_no")) for r in records}
+    gone = sub_jobs_on_a_day() - present
+    posted_records = []
+    if gone:
+        gone_pros = {pro for pro, _ in gone}
+        for ds in SUB_DATASETS:
+            posted_records.extend(
+                r for r in _decorate_records(ds, records_last_seen(ds, gone_pros))
+                if (r.get("prod_order_no"), r.get("work_centre_no")) in gone
+            )
+
     # one card per (PRO, work centre) — BC repeats a row per routing operation
     jobs: dict[tuple[str, str], dict] = {}
-    for r in records:
+    for r in records + posted_records:
         pro = r.get("prod_order_no")
         wc = r.get("work_centre_no")
         if not pro or not wc:
@@ -1634,6 +1653,7 @@ def api_subcontractors():
         if job is None:
             saved = stored.get(key, {})
             jobs[key] = {
+                "posted": key in gone,
                 "prod_order_no": pro,
                 "work_centre_no": wc,
                 "contractor": _contractor_name(wc),
