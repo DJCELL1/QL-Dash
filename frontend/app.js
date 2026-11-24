@@ -3699,6 +3699,40 @@
     return String(str).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   }
 
+  // The day's ⇅ Due button: each step's orders in due-date order, soonest first,
+  // saved as that day's running order (the same order a drag sets, and the one
+  // the Factory floor works down). Orders with no due date go last, in SO order.
+  function wireDaySortButtons(boardSel, sectionsOf, refresh) {
+    $$(`${boardSel} .day-sort-btn`).forEach((btn) => {
+      btn.addEventListener("click", async (e) => {
+        e.stopPropagation();
+        const dKey = btn.dataset.sortDate;
+        const sections = sectionsOf(dKey).filter((s) => s.cards.length);
+        if (!sections.length) return;
+        const hand = sections.some((s) =>
+          Object.keys(state.schedule.priorities || {}).some((k) => k.startsWith(`${dKey}|${s.id}|`)));
+        if (hand && !confirm(`Re-order ${fmtDayDate(parseDateKey(dKey))} by due date? This replaces the running order set for that day.`)) return;
+        btn.disabled = true;
+        try {
+          for (const s of sections) {
+            const due = new Map();
+            for (const c of s.cards) {
+              const so = soLabel(c.so);
+              const d = (c.due || "").slice(0, 10) || "9999-99-99";
+              if (!due.has(so) || d < due.get(so)) due.set(so, d);
+            }
+            const order = [...due.keys()].sort((a, b) => due.get(a).localeCompare(due.get(b)) || a.localeCompare(b));
+            await postJSON("/api/schedule/priorities", { date: dKey, section: s.id, order });
+          }
+          await refresh();
+        } catch (err) {
+          if (!err.needsSignIn) notifyError(err, "Couldn't sort that day.");
+          btn.disabled = false;
+        }
+      });
+    });
+  }
+
   // Unranked orders sort after every ranked one. Infinity rather than a big
   // number so no amount of hand-ranking can ever overtake it.
   function priorityOf(dKey, sectionId, so) {
@@ -4755,6 +4789,7 @@
             <span class="day-label">${fmtDayDate(day)}</span>
             ${wholeDay && wholeDay.planned > 0 ? scoreHTML(wholeDay) : ""}
             ${lockBtn}
+            <button class="print-btn day-sort-btn" type="button" data-sort-date="${dKey}" title="Put each step's orders in due-date order, soonest first">⇅ Due</button>
             <button class="print-btn" type="button" data-gantt-date="${dKey}" title="Gantt for this day">▤</button>
             <button class="print-btn" type="button" data-print-date="${dKey}" title="Print this day">🖶</button>
           </div>
@@ -4775,6 +4810,9 @@
     wireScheduleGroupToggles();
     wireWmFlags();
     wireDayLocks(cardsByCell);
+    wireDaySortButtons("#schedule-board", (dKey) =>
+      scheduleSections().map((s) => ({ id: s.id, cards: s.stages.flatMap((st) => cardsByCell.get(`${dKey}|${st}`) || []) })),
+      refreshScheduleAndFactory);
     wireBoardScrollTop("schedule-scroll-top", "schedule-board");
     renderNowStrip($("#schedule-now"), "doors");
     wireDayPickers();
@@ -7179,10 +7217,11 @@
     const earliestDue = (list) =>
       list.reduce((min, c) => (c.due && (!min || c.due < min) ? c.due : min), null) || "9999-99-99";
     const entries = Array.from(groups.entries());
+    // A day runs in its saved order (⇅ Due sets it), then SO order behind that.
     entries.sort(
       dKey === HOLDING_DATE
         ? (a, b) => earliestDue(a[1]).localeCompare(earliestDue(b[1])) || a[0].localeCompare(b[0])
-        : (a, b) => a[0].localeCompare(b[0])
+        : (a, b) => priorityOf(dKey, stage, a[0]) - priorityOf(dKey, stage, b[0]) || a[0].localeCompare(b[0])
     );
 
     return entries
@@ -7283,12 +7322,16 @@
         }).join("");
         return '<div class="schedule-day ' + (dKey === todayK ? "is-today" : "") + '">' +
           '<div class="schedule-day-head"><span>' + fmtDayDate(day) + "</span>" +
+          '<button class="print-btn day-sort-btn" type="button" data-sort-date="' + dKey + '" title="Put each step\'s orders in due-date order, soonest first">⇅ Due</button>' +
           '<button class="print-btn" type="button" data-cav-print="' + dKey + '" title="Print this day">🖶</button>' +
           "</div>" + sections + "</div>";
       })
       .join("");
 
     wireCavityBoard();
+    wireDaySortButtons("#cavities-board", (dKey) =>
+      CAV_STAGES.map((st) => ({ id: st, cards: cells.get(dKey + "|" + st) || [] })),
+      async () => { await loadSchedule(); renderCavities(); });
     wireBoardScrollTop("cavities-scroll-top", "cavities-board");
     renderNowStrip($("#cavities-now"), "cavities");
   }

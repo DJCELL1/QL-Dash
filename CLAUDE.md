@@ -131,6 +131,13 @@ ticked. Each door shows once. A job split across days fills its earliest day
 first, so the first doors booked count as the first ones done; dragging the
 doors still in Picking on to tomorrow leaves the picked ones where they were.
 
+Each day on the door and cavity boards has a **⇅ Due** button
+(`wireDaySortButtons()`) that saves every step's orders in due-date order, soonest
+first, as that day's running order (`/api/schedule/priorities`, the same order a
+drag sets and the Factory floor follows); it asks first if the day already has
+one. Cavity days now read that running order too, keyed by step (`cav_prep`,
+`cav_make`). Powdercoat days need no button: their SO groups always sort by due.
+
 A card is a piece of one booking at one stage. `applyCardMove()` moves the
 whole booking when the card is all of it and splits that many doors off onto
 the new day when it isn't. A card on a day that's gone by and isn't finished
